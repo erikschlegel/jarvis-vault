@@ -1,7 +1,7 @@
 {
   "attachmentFolderPath": "raw/assets",
   "newFileLocation": "folder",
-  "newFileFolderPath": "wiki/staging",
+  "newFileFolderPath": "wiki/comparisons",
   "useMarkdownLinks": true,
   "alwaysUpdateLinks": true
 }

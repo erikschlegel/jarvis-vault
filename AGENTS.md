@@ -1,126 +1,125 @@
-# LLM Wiki Operating Schema
+# LLM Wiki — Operating Schema
 
-Personal knowledge base for Erik Schlegel, following [Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+This repository implements [Andrej Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). Read `docs/llm-wiki.md` for the full idea. Co-evolve this file with the user as the knowledge base grows.
 
-## Mission
+## Core idea
 
-Maintain a persistent, compounding wiki — not a RAG dump. Knowledge is compiled once, cross-linked, and kept current as new sources arrive.
+Do not treat this as RAG. The LLM **incrementally builds and maintains a persistent wiki** — interlinked markdown between the user and immutable raw sources. Knowledge is compiled once and kept current. Cross-references, contradictions, and synthesis should already be in the wiki before the user asks.
 
-- `raw/` is read-only source material.
-- `wiki/` is the maintained knowledge layer.
-- `wiki/index.md` is the content catalog.
-- `wiki/log.md` is the append-only activity log.
+The user curates sources, explores, and asks questions. **The LLM writes and maintains almost all of the wiki.** The user reads it in Obsidian.
 
-The human curates sources, directs analysis, and asks questions. The agent writes and maintains the wiki.
+**Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase.**
 
-## State and Obsidian
+## Architecture
 
-This repository **is** the Obsidian vault. All durable state is plain markdown on disk:
+Three layers:
 
-- `wiki/` — maintained knowledge (the agent's primary write surface)
-- `raw/` — immutable sources (read-only for ingest)
-- `wiki/index.md` and `wiki/log.md` — navigation and history
+| Layer | Path | Rule |
+|-------|------|------|
+| Raw sources | `raw/` | Immutable. Read only. Never modify unless the user explicitly requests file hygiene. |
+| The wiki | `wiki/` | LLM-owned. Summaries, entity pages, concept pages, comparisons, overview, synthesis. |
+| The schema | `AGENTS.md` | This file. Structure, conventions, workflows. |
 
-Obsidian is the human's read/browse UI over the same files. Git is the backup and version history. Do not store knowledge only in chat transcripts; persist it in `wiki/`.
+Attachment images: `raw/assets/`.
 
-When editing wiki pages, use markdown links compatible with Obsidian (`[label](path.md)`). Images belong in `raw/assets/`.
+## Wiki layout
 
-## Directory rules
+```
+wiki/
+  index.md       # content catalog — update on every ingest
+  log.md         # append-only timeline
+  overview.md    # high-level map
+  synthesis.md   # evolving thesis / cross-cutting synthesis
+  sources/       # one summary page per ingested source
+  entities/      # people, orgs, products, places, works
+  concepts/      # topics, themes, methods
+  comparisons/   # comparisons, analyses, and durable query artifacts
+```
 
-### Raw sources
-
-- `raw/sources/` stores immutable source documents.
-- `raw/assets/` stores local images and attachments referenced by sources.
-- Never modify files under `raw/` unless the user explicitly requests file hygiene.
-
-### Wiki content
-
-- `wiki/overview.md` — high-level map of active domains and themes.
-- `wiki/synthesis.md` — evolving cross-domain synthesis (update when major themes shift).
-- `wiki/sources/` — one summary page per ingested source.
-- `wiki/entities/` — people, organizations, products, places, works.
-- `wiki/concepts/` — topics, methods, theses, themes.
-- `wiki/queries/` — durable answers and analyses worth keeping.
-- `wiki/staging/` — drafts pending review before promotion into the active wiki.
-
-## Writing rules
-
-- Use markdown with relative links.
-- Prefer concise, high-signal pages over long excerpts.
-- Cross-link aggressively.
-- Preserve uncertainty explicitly; flag contradictions between sources.
-- Update existing pages instead of creating duplicates.
-- Every new page must be linked from at least one other page and listed in `wiki/index.md`.
-- Use lowercase kebab-case filenames.
-
-Substantive pages should include:
-
-- A short summary at the top.
-- `## Key Points`
-- `## Evidence / Notes` (with source citations as `[[source-name]]` or markdown links)
-- `## Links`
-- `## Open Questions` when unresolved
+New pages: lowercase kebab-case filenames, relative markdown links, cross-link aggressively, update `wiki/index.md`, note contradictions explicitly.
 
 ## Operations
 
 ### Ingest
 
-When the user asks to ingest a source:
+The user drops a source into `raw/` and asks you to process it.
 
-1. Read the source from `raw/sources/` and any assets it references.
-2. Discuss key takeaways with the user if the source is ambiguous or high-stakes.
-3. Create or update a summary in `wiki/sources/`.
-4. Update relevant `wiki/entities/` and `wiki/concepts/` pages.
-5. Update `wiki/overview.md` and `wiki/synthesis.md` when the source changes the big picture.
+1. Read the source and any `raw/assets/` it references.
+2. Discuss key takeaways with the user when useful — Karpathy prefers **one source at a time with the user involved**.
+3. Write a summary page in `wiki/sources/`.
+4. Update relevant entity and concept pages across the wiki (a single source may touch 10–15 pages).
+5. Update `wiki/overview.md` and `wiki/synthesis.md` when the big picture shifts.
 6. Update `wiki/index.md`.
-7. Append an entry to `wiki/log.md`.
+7. Append to `wiki/log.md`.
 
-One source may touch many wiki pages. Prefer reconciling existing pages coherently over appending fragments.
+Integrate into the existing wiki — do not merely index for later retrieval.
 
 ### Query
 
-When the user asks a question:
+The user asks questions against the wiki.
 
 1. Read `wiki/index.md` first.
-2. Open the most relevant wiki pages.
-3. Synthesize an answer with inline citations to wiki page paths.
-4. If the answer has durable value, save it under `wiki/queries/`.
-5. Update `wiki/index.md` and append a `query` entry to `wiki/log.md` when a query artifact is created.
+2. Open relevant pages, then synthesize an answer **with citations** to wiki paths.
+3. **File durable answers back into the wiki** — comparisons, analyses, connections. Do not let valuable work die in chat history. Save under `wiki/comparisons/` (or the appropriate category).
+4. Update `wiki/index.md` and append a `query` entry to `wiki/log.md` when filing a new page.
+
+Answers may be markdown pages, comparison tables, or other formats the user requests (Marp slides, charts, etc.).
 
 ### Lint
 
 When the user asks for a health check:
 
-1. Find contradictions between pages.
-2. Find stale claims superseded by newer sources.
-3. Find orphan pages with no inbound links.
-4. Find important terms mentioned repeatedly without dedicated pages.
-5. Find missing cross-references.
-6. Propose fixes or apply them with user approval.
-7. Append a `lint` entry to `wiki/log.md`.
+Look for:
 
-## Index format
+- Contradictions between pages
+- Stale claims newer sources have superseded
+- Orphan pages with no inbound links
+- Important concepts mentioned but lacking their own page
+- Missing cross-references
+- Data gaps that could be filled with a web search
 
-Keep `wiki/index.md` compact. Organize by section: overview, sources, entities, concepts, queries.
+Suggest new questions and sources to investigate. Apply fixes with user approval. Append a `lint` entry to `wiki/log.md`.
 
-Each entry: page link, one-line description, optional date or source count.
+## Indexing and logging
 
-## Log format
+### `wiki/index.md` (content-oriented)
 
-Append-only entries:
+Catalog of every wiki page: link, one-line summary, optional metadata (date, source count). Organized by category: overview, synthesis, sources, entities, concepts, comparisons.
+
+Update on every ingest. On query, read the index first, then drill into pages. At moderate scale (~100 sources, hundreds of pages) the index is enough — no embedding RAG required.
+
+### `wiki/log.md` (chronological)
+
+Append-only record of ingests, queries, and lint passes. Use a consistent prefix:
 
 ```md
-## [YYYY-MM-DD] operation | title
+## [YYYY-MM-DD] ingest | Article Title
 
 - Summary of what changed
 - Pages touched: [page](relative/path.md)
 ```
 
-Parseable prefix: `## [YYYY-MM-DD] ingest | Article Title`
+Parseable with: `grep "^## \[" wiki/log.md | tail -5`
 
-## Quality bar
+## Obsidian and git
 
-- Do not dump large source excerpts into the wiki.
-- Do not restate the same idea across many pages without page-specific value.
+This repo **is** the Obsidian vault. State is markdown on disk; git is version history.
+
+- **Obsidian Web Clipper** → save articles into `raw/`
+- **Attachment folder:** `raw/assets/` (configured in `.obsidian/app.json`)
+- **Download attachments for current file** hotkey after clipping (e.g. Ctrl+Shift+D)
+- **Graph view** to see wiki shape, hubs, and orphans
+- Optional: **Dataview** if you add YAML frontmatter; **Marp** for slides from wiki content
+
+For images in sources: read text first, then view referenced images separately if needed.
+
+## Optional tools
+
+At larger scale, add local search (e.g. [qmd](https://github.com/tobi/qmd)) — not required initially.
+
+## Boundaries
+
+- Never modify `raw/` during ingest.
+- Prefer updating existing wiki pages over creating duplicates.
 - Leave the wiki more connected after every operation.
-- Good explorations and comparisons belong in the wiki, not only in chat history.
+- Persist knowledge in `wiki/`, not only in conversation.

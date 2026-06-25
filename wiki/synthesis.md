@@ -1,11 +1,5 @@
 # Synthesis
 
-Evolving cross-domain synthesis. Updated when ingests or queries shift the overall picture.
+Evolving cross-cutting synthesis and thesis. The agent revises this when new sources or queries shift the picture.
 
-## Current thesis
-
-_The wiki is empty. Synthesis will emerge as sources are ingested._
-
-## Open threads
-
-_None yet._
+_No synthesis yet._

@@ -1,24 +1,24 @@
-# Wiki index
+# Index
 
-Catalog of all active wiki pages. The agent updates this on every ingest, query, and lint.
+Content catalog. The agent updates this on every ingest. Read this first when answering queries.
 
 ## Overview
 
-- [overview.md](overview.md) — active domains and themes
-- [synthesis.md](synthesis.md) — cross-domain synthesis
+- [overview.md](overview.md)
+- [synthesis.md](synthesis.md)
 
 ## Sources
 
-_No sources ingested yet._
+_None yet._
 
 ## Entities
 
-_No entity pages yet._
+_None yet._
 
 ## Concepts
 
-_No concept pages yet._
+_None yet._
 
-## Queries
+## Comparisons
 
-_No query artifacts yet._
+_None yet._

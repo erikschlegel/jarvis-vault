@@ -1,10 +1,11 @@
-# Wiki log
+# Log
 
-Append-only chronological record of ingests, queries, and lint passes.
+Append-only timeline of ingests, queries, and lint passes.
 
 ```md
-## [YYYY-MM-DD] operation | title
-
-- Summary
-- Pages touched: [page](path.md)
+## [YYYY-MM-DD] ingest | Article Title
 ```
+
+Recent entries:
+
+_(empty)_

@@ -1,30 +1,32 @@
 # erik-knowledge-base
 
-A git-backed personal knowledge base. Content lives as plain Markdown under `content/`.
+A git-backed personal knowledge base using [Andrej Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
-## Structure
+The LLM maintains a compounding wiki from immutable sources. You curate inputs and ask questions; the agent does summarizing, cross-referencing, and upkeep.
 
-```text
-content/
-  index.md          # Home page and table of contents
-  topics/           # Topical notes and reference material
-  projects/         # Project-specific notes
-  inbox/            # Quick captures to sort later
-```
+## Three layers
 
-## Workflow
+| Layer | Path | Role |
+|-------|------|------|
+| Raw sources | `raw/` | Immutable inputs — articles, notes, transcripts. Read-only for the agent. |
+| Wiki | `wiki/` | LLM-maintained markdown — entities, concepts, source summaries, synthesis. |
+| Schema | `AGENTS.md` | Operating rules: structure, conventions, ingest/query/lint workflows. |
 
-1. Add or edit Markdown files under `content/`.
-2. Link related notes with relative paths, e.g. `[topic](topics/example.md)`.
-3. Commit when a note is ready to keep.
+## Quick start
 
-```bash
-git add content/
-git commit -m "docs: add note on <topic>"
-```
+1. Drop a source into `raw/sources/`.
+2. Ask the agent to **ingest** it (see `AGENTS.md`).
+3. Browse the wiki in Obsidian or your editor; follow links in `wiki/index.md`.
+4. Ask questions against the wiki; file durable answers under `wiki/queries/`.
+5. Periodically ask the agent to **lint** the wiki for orphans, contradictions, and stale claims.
 
-## Conventions
+## Navigation
 
-- Use lowercase kebab-case filenames (`my-topic.md`).
-- Start each file with an `#` title.
-- Prefer short, focused notes over long monolithic documents.
+- [wiki/index.md](wiki/index.md) — catalog of all wiki pages
+- [wiki/log.md](wiki/log.md) — chronological activity log
+- [wiki/overview.md](wiki/overview.md) — high-level map of active domains
+- [AGENTS.md](AGENTS.md) — agent operating schema
+
+## Obsidian
+
+Open this repo as an Obsidian vault. Set **Attachment folder path** to `raw/assets/` so clipped images stay local. Use graph view to see how pages connect.

@@ -1,4 +1,7 @@
 .DS_Store
 .idea/
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/plugins/
 *.swp
 *.swo

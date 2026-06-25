@@ -4,7 +4,7 @@
 Setup (one time):
   1. Copy .env.example → .env and fill X_CLIENT_ID / X_CLIENT_SECRET
   2. In the X developer portal, set callback URL to X_REDIRECT_URI (default below)
-  3. App permissions: Read; enable OAuth 2.0; scopes: tweet.read users.read like.read bookmark.read offline.access
+  3. App eriks-knowledge-base: Read permissions; OAuth 2.0; scopes: tweet.read users.read like.read bookmark.read offline.access
   4. Run: python3 scripts/fetch_x_api.py login
 
 Fetch:

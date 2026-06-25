@@ -15,7 +15,7 @@ raw/x/
 
 ### 1. Developer portal checklist
 
-In [developer.x.com](https://developer.x.com) → your app:
+In [developer.x.com](https://developer.x.com) → app **eriks-knowledge-base**:
 
 | Setting | Value |
 |---------|--------|

@@ -1,7 +1,10 @@
 .DS_Store
 .idea/
+# Obsidian UI state (vault settings in .obsidian/app.json are committed)
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/plugins/
+.obsidian/themes/
+.trash/
 *.swp
 *.swo

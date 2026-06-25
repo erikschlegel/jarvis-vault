@@ -13,6 +13,18 @@ Maintain a persistent, compounding wiki — not a RAG dump. Knowledge is compile
 
 The human curates sources, directs analysis, and asks questions. The agent writes and maintains the wiki.
 
+## State and Obsidian
+
+This repository **is** the Obsidian vault. All durable state is plain markdown on disk:
+
+- `wiki/` — maintained knowledge (the agent's primary write surface)
+- `raw/` — immutable sources (read-only for ingest)
+- `wiki/index.md` and `wiki/log.md` — navigation and history
+
+Obsidian is the human's read/browse UI over the same files. Git is the backup and version history. Do not store knowledge only in chat transcripts; persist it in `wiki/`.
+
+When editing wiki pages, use markdown links compatible with Obsidian (`[label](path.md)`). Images belong in `raw/assets/`.
+
 ## Directory rules
 
 ### Raw sources

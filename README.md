@@ -27,6 +27,26 @@ The LLM maintains a compounding wiki from immutable sources. You curate inputs a
 - [wiki/overview.md](wiki/overview.md) — high-level map of active domains
 - [AGENTS.md](AGENTS.md) — agent operating schema
 
-## Obsidian
+## State: this repo is your Obsidian vault
 
-Open this repo as an Obsidian vault. Set **Attachment folder path** to `raw/assets/` so clipped images stay local. Use graph view to see how pages connect.
+There is no separate database or app state. **The vault is the source of truth.**
+
+| What | Where it lives |
+|------|----------------|
+| Wiki pages, links, synthesis | `wiki/*.md` on disk |
+| Raw sources | `raw/sources/` |
+| Images and attachments | `raw/assets/` |
+| Activity history | `wiki/log.md` |
+| Page catalog | `wiki/index.md` |
+| Version history / backup | git commits on this repo |
+| Obsidian UI (tabs, pane layout) | `.obsidian/workspace.json` (local only, not committed) |
+
+Open **`erik-knowledge-base`** as an Obsidian vault (File → Open folder as vault). The agent and Obsidian read and write the same markdown files. You browse in Obsidian; the agent maintains `wiki/`; git records changes over time.
+
+Vault settings (attachment path `raw/assets/`, wikilinks) are preconfigured in `.obsidian/app.json`.
+
+**Karpathy's split:** Obsidian is the IDE, the LLM is the programmer, the wiki is the codebase.
+
+### If you already have an Obsidian vault elsewhere
+
+Point the vault at this folder instead, or move/symlink this repo to your vault path. The knowledge state must live in the markdown tree (`raw/` + `wiki/`), not in Obsidian's internal cache.

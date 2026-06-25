@@ -8,3 +8,5 @@
 .trash/
 *.swp
 *.swo
+.env
+.secrets/

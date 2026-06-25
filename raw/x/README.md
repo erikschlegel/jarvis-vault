@@ -1,54 +1,64 @@
 # X (Twitter) raw sources
 
-Immutable liked and bookmarked tweets, one markdown file per post. The agent reads these during **ingest**; do not edit after import.
+Immutable liked and bookmarked tweets — one markdown file per post. The agent reads these during **ingest**; do not edit after import.
 
 ## Layout
 
 ```text
 raw/x/
-  likes/       ← from X account data export (like.js)
-  bookmarks/   ← from xarchive JSON export
-  clips-imported/  ← normalized Obsidian Web Clipper tweets
+  likes/            ← from X API or account export
+  bookmarks/        ← from X API or xarchive JSON
+  clips-imported/   ← Obsidian Web Clipper tweets
 ```
 
-## How to populate
+## Recommended: X API (OAuth 2.0)
 
-### Likes (last 12 months)
+### 1. Developer portal checklist
 
-1. X → **Settings → Your account → Download an archive of your data**
-2. Request archive; wait for email (often 24–48 hours)
-3. Download and unzip
-4. Run:
+In [developer.x.com](https://developer.x.com) → your app:
+
+| Setting | Value |
+|---------|--------|
+| App permissions | **Read** |
+| OAuth 2.0 | Enabled |
+| Type of App | Web App (or Native for local dev) |
+| Callback URI | `http://127.0.0.1:8765/callback` |
+| Scopes | `tweet.read` `users.read` `like.read` `bookmark.read` `offline.access` |
+
+Copy **Client ID** and **Client Secret** (OAuth 2.0 section — not the legacy API Key alone).
+
+### 2. Local config
 
 ```bash
-python3 scripts/import_x_sources.py \
-  --archive ~/Downloads/twitter-YYYY-MM-DD-xxxxx \
-  --months 12
+cd /Users/erikschlegel/Source/erik/erik-knowledge-base
+cp .env.example .env
+# Edit .env — paste Client ID and Secret. Do not commit .env.
 ```
 
-Note: `like.js` often contains tweet IDs only. Full text may require a paid X API lookup or manual clip for sparse entries.
-
-### Bookmarks
-
-X's official archive **does not include bookmarks**. Use the [xarchive](https://github.com/sytelus/xarchive) Chrome extension:
-
-1. Load extension, browse x.com while logged in
-2. Export bookmarks to JSON
-3. Run:
+### 3. One-time login (browser)
 
 ```bash
-python3 scripts/import_x_sources.py \
-  --bookmarks-json ~/Downloads/bookmarks.json \
-  --months 12
+python3 scripts/fetch_x_api.py login
 ```
 
-### Existing Obsidian clips
+Approves access as `@erikschlegel1`. Tokens save to `.secrets/x_tokens.json` (gitignored).
+
+### 4. Fetch into raw/
 
 ```bash
-python3 scripts/import_x_sources.py \
-  --clips "$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI Ideas /Tweets"
+python3 scripts/fetch_x_api.py fetch --likes --bookmarks --months 12
 ```
 
-## After import
+Writes one `.md` file per tweet under `likes/` and `bookmarks/`.
 
-Tell the agent: **"Ingest new sources from raw/x/"** — it will compile wiki pages per `AGENTS.md`.
+**Note:** The API returns tweet post dates, not the exact time you liked or bookmarked. `--months` filters by when the tweet was posted (best available proxy). Increase `--max-pages` if you need deeper history.
+
+### 5. Wiki ingest
+
+Tell the agent: **"Ingest new sources from raw/x/"**
+
+## Fallbacks
+
+- **Likes archive:** `python3 scripts/import_x_sources.py --archive ~/Downloads/twitter-...`
+- **Bookmarks JSON (xarchive):** `python3 scripts/import_x_sources.py --bookmarks-json ~/Downloads/bookmarks.json`
+- **Obsidian clips:** `python3 scripts/import_x_sources.py --clips "…/AI Ideas /Tweets"`

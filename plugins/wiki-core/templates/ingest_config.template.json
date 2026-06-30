@@ -1,0 +1,49 @@
+{
+  "_comment": "Template for the LLM Wiki ingest domain routing. Copy to your active config (default <vault>/.wiki_index/ingest_config.json, or set WIKI_CONFIG) and tune. Each source is classified into one domain; only enabled domains are compiled. Leave an enabled domain's \"vault\" empty to compile into WIKI_VAULT; set an absolute path to override per domain.",
+  "domains": {
+    "ai-swe": {
+      "enabled": true,
+      "vault": "",
+      "keywords": [
+        "ai", "a.i", "llm", "agent", "agentic", "model", "gpt", "claude", "gemini",
+        "openai", "anthropic", "deepmind", "mistral", "llama", "transformer", "neural",
+        "machine learning", "ml", "deep learning", "rag", "embedding", "vector", "prompt",
+        "fine-tune", "fine tuning", "inference", "token", "context window", "coding",
+        "code", "software", "engineer", "developer", "programming", "python", "typescript",
+        "rust", "kubernetes", "docker", "azure", "aws", "gcp", "cloud", "api", "sdk",
+        "mcp", "copilot", "cursor", "compiler", "dataset", "benchmark", "gpu", "cuda",
+        "pytorch", "tensorflow", "diffusion", "reasoning", "karpathy"
+      ],
+      "authors": ["karpathy", "jiayuan_jy", "min_choi"]
+    },
+    "fantasy-football": {
+      "enabled": false,
+      "vault": "",
+      "keywords": [
+        "nfl", "fantasy", "touchdown", "quarterback", "eagles", "superbowl", "super bowl",
+        "draft", "roster", "running back", "wide receiver", "playoff", "gridiron"
+      ],
+      "authors": []
+    },
+    "politics": {
+      "enabled": false,
+      "vault": "",
+      "keywords": [
+        "election", "senate", "congress", "president", "policy", "tariff", "trade deal",
+        "democrat", "republican", "campaign", "vote", "government", "eu deal"
+      ],
+      "authors": []
+    },
+    "fitness": {
+      "enabled": false,
+      "vault": "",
+      "keywords": [
+        "gym", "workout", "protein", "muscle", "reps", "exercise", "fitness", "cardio",
+        "calories", "nutrition", "diet"
+      ],
+      "authors": []
+    }
+  },
+  "default_domain": "ai-swe",
+  "unclassified": "review"
+}

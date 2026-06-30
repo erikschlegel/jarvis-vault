@@ -1,0 +1,25 @@
+[project]
+name = "wiki-connector-x"
+version = "0.1.0"
+description = "X (Twitter) source connector for the erik-knowledge-base LLM Wiki: fetch, import, and transcribe."
+requires-python = ">=3.12"
+dependencies = [
+    "wiki-core",
+    "faster-whisper>=1.2.1",
+]
+
+[project.scripts]
+x-fetch = "wiki_connector_x.fetch_x_api:main"
+x-import = "wiki_connector_x.import_x_sources:main"
+x-transcribe = "wiki_connector_x.transcribe_x_videos:main"
+x-refresh-streams = "wiki_connector_x.refresh_x_video_streams:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wiki_connector_x"]
+
+[tool.uv.sources]
+wiki-core = { workspace = true }

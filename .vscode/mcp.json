@@ -1,0 +1,15 @@
+{
+  // Local dev config: uv run uses the editable wiki-core install (engine edits
+  // take effect immediately) and reads WIKI_VAULT from the layered .env, so no
+  // prompt or env block is needed here. Run `uv run wiki-init` once to seed the
+  // vault and build the search index; it also prints a portable `uv run
+  // --directory <repo>` snippet for registering the server in another MCP client.
+  "servers": {
+    "erik-wiki": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "wiki-mcp"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

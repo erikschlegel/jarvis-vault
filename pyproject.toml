@@ -1,0 +1,77 @@
+[project]
+name = "erik-knowledge-base"
+version = "0.1.0"
+requires-python = ">=3.12"
+# The workspace root is virtual (see [tool.uv]); it depends on the plugin
+# packages so `uv sync` installs them (and their console scripts) editable.
+dependencies = [
+    "wiki-core",
+    "wiki-connector-x",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["plugins/*"]
+
+[tool.uv.sources]
+wiki-core = { workspace = true }
+wiki-connector-x = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pytest>=9.1.1",
+    "ruff>=0.15.20",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+# Enforced surface: every plugin package source tree and its tests.
+include = ["plugins/*/src/**/*.py", "plugins/*/tests/**/*.py"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort import ordering
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "PTH", # flake8-use-pathlib
+]
+# Determinism: an explicit, fixed rule set with no auto-discovered plugins.
+
+[tool.ruff.lint.isort]
+# Plugin packages are first-party.
+known-first-party = ["wiki_core", "wiki_connector_x"]
+
+[tool.mypy]
+python_version = "3.12"
+# Same enforced surface as ruff: every plugin package source tree and tests.
+files = [
+    "plugins/wiki-core/src",
+    "plugins/wiki-core/tests",
+    "plugins/wiki-connector-x/src",
+]
+mypy_path = ["plugins/wiki-core/src", "plugins/wiki-connector-x/src"]
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Third-party retrieval/ML packages ship no type stubs; ignoring their missing
+# imports keeps the check deterministic and focused on first-party code.
+[[tool.mypy.overrides]]
+module = ["av", "bm25s", "fastembed", "faster_whisper", "mcp.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# Plugin packages are installed editable, but pythonpath keeps collection robust.
+pythonpath = ["plugins/wiki-core/src", "plugins/wiki-connector-x/src"]
+testpaths = ["plugins/wiki-core/tests", "plugins/wiki-connector-x/tests"]
+markers = [
+    "integration: spawns the MCP server over stdio against the real index",
+]

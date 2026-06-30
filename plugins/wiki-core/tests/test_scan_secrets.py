@@ -20,7 +20,7 @@ CLEAN_FILE = "# Hello\n\nNothing secret here.\n"
 # PrivateKeyDetector fires on this header deterministically (no entropy or
 # example-value heuristics involved).
 PRIVATE_KEY_FILE = (
-    "-----BEGIN PRIVATE KEY-----\n"
+    "-----BEGIN PRIVATE KEY-----\n"  # pragma: allowlist secret
     "MIIBVQIBADANBgkq= not a real key payload\n"
     "-----END PRIVATE KEY-----\n"
 )

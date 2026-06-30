@@ -153,6 +153,8 @@ Do not download MP4s into the repo unless the user explicitly asks. Prefer `vide
 
 ## Access tiers
 
+**Session preflight.** At the start of a session, run `uv run wiki-doctor` and surface any FAIL or warn lines to the user — including the printed plugin-install commands — before doing other work.
+
 The wiki is markdown first; the engine is an accelerator, not a gate. Three tiers, each a superset of the one below:
 
 - **Tier 0 — files (always available).** Every wiki page, including `pulse.md` and `index.md`, is markdown on disk under `WIKI_VAULT`. Read and write it with native file tools at the vault path. Ingest, Query, and Lint all work at this tier with no package install: read `pulse.md` then `index.md` to orient, open pages directly, and write pages back. This is the Karpathy baseline.
@@ -185,6 +187,19 @@ Locations resolve from environment variables, with a vault-relative default so a
 The committed [plugins/wiki-core/templates/ingest_config.template.json](plugins/wiki-core/templates/ingest_config.template.json) is the starting point for a personal config; copy it to `<vault>/.wiki_index/ingest_config.json` (or wherever `WIKI_CONFIG` points) and tune the domain routing.
 
 ## Code quality
+
+**Before every commit, run the complete lint gate and only commit when it is clean.** The full gate is the union of every check below — Python formatting, lint, types, and tests, plus the markdown and secret scans:
+
+```bash
+uv run ruff format --check   # formatting is consistent
+uv run ruff check            # lint (fixed rule set, no auto-discovered plugins)
+uv run mypy                  # strict static types
+uv run pytest                # hermetic engine tests + MCP stdio contract
+uv run lint-docs             # markdown structure + SKILL.md frontmatter schema
+uv run scan-secrets          # detect-secrets over git-tracked files vs .secrets.baseline
+```
+
+A commit is permitted only when all six commands exit zero. This is a mandatory pre-commit gate, not a suggestion: never commit with a failing or unrun check. The per-surface detail below explains each check.
 
 The Python packages under `plugins/*/src/` are gated by deterministic linting and type checking. Run the gate after any change to that Python code, and before committing it:
 

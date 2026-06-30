@@ -36,14 +36,26 @@ MIN_PYTHON: tuple[int, int] = (3, 12)
 # Server name registered in every MCP client config.
 MCP_SERVER_NAME = "jarvis-vault"
 
+# Marketplace that ships the wiki skill plugins (matches bin/setup.sh MARKETPLACE_NAME).
+MARKETPLACE_NAME = "jarvis-vault"
+
+# Skill plugins a Copilot client must install to surface the wiki skills.
+REQUIRED_PLUGINS: tuple[str, ...] = ("wiki-core", "wiki-connector-x")
+
 
 @dataclass
 class Diagnostic:
-    """One onboarding check: a name, pass/fail, and a human-readable detail."""
+    """One onboarding check: a name, pass/fail, and a human-readable detail.
+
+    ``warn_only`` marks an advisory check (e.g. a client-side convenience that is
+    legitimately absent in headless or CI runs): it is printed as ``[warn]`` and
+    never affects the overall pass/fail roll-up.
+    """
 
     name: str
     ok: bool
     detail: str
+    warn_only: bool = False
 
 
 def _templates_vault() -> Path:
@@ -201,6 +213,65 @@ def _mcp_check() -> Diagnostic:
     )
 
 
+def _enabled_plugin_specs() -> list[str]:
+    """Collect truthy ``enabledPlugins`` keys from Copilot settings (fail-soft).
+
+    Reads the personal ``~/.copilot/settings.json`` and the repo-local
+    ``.github/copilot/settings.json``; a missing or unparseable file contributes
+    nothing rather than raising, mirroring ``_file_mentions_server``.
+    """
+    specs: list[str] = []
+    candidates = [
+        Path.home() / ".copilot" / "settings.json",
+        _repo_root() / ".github" / "copilot" / "settings.json",
+    ]
+    for path in candidates:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        enabled = data.get("enabledPlugins") if isinstance(data, dict) else None
+        if not isinstance(enabled, dict):
+            continue
+        specs.extend(key for key, value in enabled.items() if value)
+    return specs
+
+
+def _plugin_enabled(name: str, specs: list[str]) -> bool:
+    """True when ``name`` is enabled as a marketplace spec or a local-path plugin."""
+    marketplace = f"{name}@{MARKETPLACE_NAME}"
+    suffix = f"plugins/{name}"
+    return any(spec == marketplace or spec.rstrip("/").endswith(suffix) for spec in specs)
+
+
+def _plugins_check() -> Diagnostic:
+    """Report whether the wiki skill plugins are enabled in a Copilot client.
+
+    Warn-only: the plugins are a desktop/CLI convenience that is never present in
+    a headless or CI run, so a miss must not flip the doctor exit code. On a miss
+    the detail embeds the exact ``copilot plugin`` commands to install them.
+    """
+    specs = _enabled_plugin_specs()
+    missing = [name for name in REQUIRED_PLUGINS if not _plugin_enabled(name, specs)]
+    if not missing:
+        return Diagnostic(
+            "skill plugins",
+            True,
+            ", ".join(REQUIRED_PLUGINS) + " enabled",
+            warn_only=True,
+        )
+    commands = "; ".join(
+        [f"copilot plugin marketplace add {_repo_root()}"]
+        + [f"copilot plugin install {name}@{MARKETPLACE_NAME}" for name in REQUIRED_PLUGINS]
+    )
+    return Diagnostic(
+        "skill plugins",
+        False,
+        f"not enabled: {', '.join(missing)} -- install with: {commands}",
+        warn_only=True,
+    )
+
+
 def diagnose() -> list[Diagnostic]:
     """Run the read-only onboarding checks and return them in report order."""
     checks: list[Diagnostic] = [_python_check()]
@@ -244,6 +315,7 @@ def diagnose() -> list[Diagnostic]:
         )
     checks.append(_scripts_check())
     checks.append(_mcp_check())
+    checks.append(_plugins_check())
     return checks
 
 
@@ -282,12 +354,22 @@ def run_init(*, force: bool, build: bool) -> int:
 
 
 def _print_diagnostics(checks: list[Diagnostic]) -> bool:
-    """Print each check with a status marker; return True when all passed."""
+    """Print each check with a status marker; return True when all required checks passed.
+
+    Warn-only checks render as ``[warn]`` and never affect the returned status, so
+    a client-side convenience (e.g. plugins absent in CI) cannot fail setup.
+    """
     all_ok = True
     for check in checks:
-        marker = "ok  " if check.ok else "FAIL"
+        if check.ok:
+            marker = "ok  "
+        elif check.warn_only:
+            marker = "warn"
+        else:
+            marker = "FAIL"
         print(f"[{marker}] {check.name}: {check.detail}")
-        all_ok = all_ok and check.ok
+        if not check.warn_only:
+            all_ok = all_ok and check.ok
     return all_ok
 
 

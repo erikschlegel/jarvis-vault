@@ -8,6 +8,7 @@ genuinely unconfigured regardless of the developer's environment.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -162,3 +163,83 @@ def test_mcp_registrations_finds_vscode(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setattr(wiki_init, "_repo_root", lambda: repo)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     assert wiki_init.mcp_registrations() == ["VS Code (.vscode/mcp.json)"]
+
+
+def _write_copilot_settings(home: Path, specs: dict[str, bool]) -> None:
+    settings = home / ".copilot" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(
+        json.dumps({"enabledPlugins": specs}),
+        encoding="utf-8",
+    )
+
+
+def test_plugins_check_passes_when_both_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    # One marketplace spec, one local-path spec — both forms must be recognised.
+    _write_copilot_settings(
+        home,
+        {
+            "wiki-core@jarvis-vault": True,
+            f"{tmp_path}/repo/plugins/wiki-connector-x": True,
+        },
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(wiki_init, "_repo_root", lambda: tmp_path / "repo")
+    check = wiki_init._plugins_check()
+    assert check.warn_only is True
+    assert check.ok is True
+
+
+def test_plugins_check_warns_and_prints_install_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    # A disabled plugin and an unrelated one — neither required plugin is enabled.
+    _write_copilot_settings(home, {"wiki-core@jarvis-vault": False, "other@elsewhere": True})
+    repo = tmp_path / "repo"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(wiki_init, "_repo_root", lambda: repo)
+    check = wiki_init._plugins_check()
+    assert check.ok is False
+    assert check.warn_only is True
+    assert "wiki-core" in check.detail
+    assert "wiki-connector-x" in check.detail
+    assert f"copilot plugin marketplace add {repo}" in check.detail
+    assert "copilot plugin install wiki-core@jarvis-vault" in check.detail
+    assert "copilot plugin install wiki-connector-x@jarvis-vault" in check.detail
+
+
+def test_plugins_check_fail_soft_when_settings_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(wiki_init, "_repo_root", lambda: tmp_path / "repo")
+    check = wiki_init._plugins_check()
+    assert check.ok is False
+    assert check.warn_only is True
+
+
+def test_print_diagnostics_warn_does_not_fail(capsys: pytest.CaptureFixture[str]) -> None:
+    checks = [
+        wiki_init.Diagnostic("python", True, "3.12"),
+        wiki_init.Diagnostic("skill plugins", False, "not enabled", warn_only=True),
+    ]
+    all_ok = wiki_init._print_diagnostics(checks)
+    assert all_ok is True
+    out = capsys.readouterr().out
+    assert "[warn] skill plugins" in out
+    assert "[ok  ] python" in out
+
+
+def test_print_diagnostics_required_failure_fails(capsys: pytest.CaptureFixture[str]) -> None:
+    checks = [
+        wiki_init.Diagnostic("vault directory", False, "missing"),
+        wiki_init.Diagnostic("skill plugins", False, "not enabled", warn_only=True),
+    ]
+    all_ok = wiki_init._print_diagnostics(checks)
+    assert all_ok is False
+    out = capsys.readouterr().out
+    assert "[FAIL] vault directory" in out

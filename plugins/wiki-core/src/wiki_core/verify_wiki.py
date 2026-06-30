@@ -56,10 +56,14 @@ HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z0-9_]+):\s*(.*)$")
 
 # Required frontmatter per content directory: (expected `type`, required keys).
+# Vault pages follow the Open Knowledge Format (OKF): every content page declares a
+# reserved `type`; sources use the reserved `resource`/`timestamp`/`title` names.
+# OKF hard-requires only `type` — `tags` is an optional reserved key (see below).
 REQUIRED_FRONTMATTER: dict[str, tuple[str, tuple[str, ...]]] = {
-    "sources": ("source", ("tweet_id", "source_url", "raw", "ingested", "domain")),
+    "sources": ("source", ("tweet_id", "resource", "raw", "timestamp", "domain")),
     "entities": ("entity", ("entity_kind", "name", "domain")),
     "concepts": ("concept", ("name", "domain")),
+    "comparisons": ("comparison", ("title",)),
 }
 
 
@@ -175,6 +179,12 @@ def main() -> int:
         missing = [k for k in required_keys if not fm.get(k)]
         if missing:
             frontmatter_violations.append(f"{rel(p)}: missing {', '.join(missing)}")
+        # `tags` is an optional OKF reserved key. Absent or empty is conformant; when
+        # present inline (`tags: [..]`) it must be a YAML list. Block-style lists are
+        # skipped by the scalar parser and so are not checked here.
+        tags_val = fm.get("tags")
+        if tags_val and not tags_val.startswith("["):
+            frontmatter_violations.append(f"{rel(p)}: tags must be a list")
 
     # Manifest drift (forward): ingested sources whose wiki_page is missing on disk.
     # Reverse drift: source pages on disk not finalized as ingested in the manifest.

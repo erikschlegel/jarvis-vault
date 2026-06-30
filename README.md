@@ -16,38 +16,29 @@ The wiki itself lives in an external Obsidian vault (resolved via `WIKI_VAULT`).
 
 ## Setup
 
-You need [uv](https://docs.astral.sh/uv/) (the Python toolchain) and a folder to hold the wiki — ideally an [Obsidian](https://obsidian.md/) vault, though any directory works.
+The deterministic engine is mandatory however you drive it: the skills and the MCP server resolve your vault from `WIKI_VAULT`. You need [uv](https://docs.astral.sh/uv/) (the Python toolchain), Python 3.12+ (uv can install it), and a folder to hold the wiki — ideally an [Obsidian](https://obsidian.md/) vault, though any directory works.
 
-1. **Install dependencies.** From the repo root:
+| Requirement | Why |
+|-------------|-----|
+| [uv](https://docs.astral.sh/uv/) | Runs every console script; `bin/setup.sh` installs it on consent |
+| Python 3.12+ | Engine runtime (uv installs a managed build if needed) |
+| A vault folder | Holds `wiki/` and its `raw/` sibling |
 
-   ```bash
-   uv sync
-   ```
+There are three ways in:
 
-2. **Point the engine at your vault.** Copy the example env file and set `WIKI_VAULT` to the absolute path of your vault's wiki root (the folder that will hold `index.md`):
-
-   ```bash
-   cp .env.example .env
-   # then edit .env and set WIKI_VAULT=/absolute/path/to/your-vault/wiki
-   ```
-
-   The `.env` is discovered automatically from the working directory upward, then this repo, then `~/.config/jarvis-vault/.env`. A real exported environment variable always wins over the file.
-
-3. **Seed the vault and build the index.** One command seeds an empty vault from the shipped template, builds the search index, and prints an MCP server entry:
+1. **Clone and run setup (recommended).** One idempotent script detects your toolchain, seeds the vault, builds the index, and registers the MCP server:
 
    ```bash
-   uv run wiki-init
+   git clone https://github.com/erikschlegel/jarvis-vault.git
+   cd jarvis-vault
+   bash bin/setup.sh
    ```
 
-   Re-running is safe — it never overwrites existing pages (pass `--force` to re-copy the template, `--no-build` to skip the index build when offline).
+2. **Install as a Copilot plugin.** Get the skills with `copilot plugin install` (see [below](#install-as-a-copilot-plugin)), then complete the engine setup with `bin/setup.sh` or the manual steps.
 
-4. **Verify.** `wiki-doctor` reports the same checks read-only, so you can confirm what is configured before ingesting:
+3. **Add to an existing checkout.** Run `uv sync`, copy `.env.example` to `.env` and set `WIKI_VAULT`, then `uv run wiki-init`. Verify any time with `uv run wiki-doctor`.
 
-   ```bash
-   uv run wiki-doctor
-   ```
-
-5. **Wire up the MCP retrieval server.** This repo already ships [.vscode/mcp.json](.vscode/mcp.json), so VS Code picks up the `jarvis-vault` server (`uv run wiki-mcp`) automatically — it reads `WIKI_VAULT` from your `.env`, no prompt. For another client, paste the snippet `wiki-init` printed (the portable `uv run --directory <repo>` form) into that client's MCP config.
+See [SETUP.md](SETUP.md) for the full walkthrough: requirements, the manual path, MCP registration for the GitHub Copilot CLI and VS Code, and troubleshooting mapped to `wiki-doctor`.
 
 The engine is files-first and degrades gracefully: even without the MCP server, every wiki page is plain markdown you can read and edit directly, and the `wiki-search` CLI covers retrieval. See the access tiers in [AGENTS.md](AGENTS.md) for the full files → CLI → MCP progression.
 
@@ -55,15 +46,25 @@ For the X (Twitter) connector — API credentials, fetching likes and bookmarks,
 
 ## Install as a Copilot plugin
 
-The skills also ship as installable GitHub Copilot plugins, declared in [.github/plugin/marketplace.json](.github/plugin/marketplace.json). Add this repo as a local marketplace, then install the plugins you want:
+The skills ship as installable GitHub Copilot plugins, declared in [.github/plugin/marketplace.json](.github/plugin/marketplace.json): `wiki-core` (the engine and its ingest/query/lint skills) and `wiki-connector-x` (the X pre-ingest skills, which depend on `wiki-core`).
 
-```text
-/plugin marketplace add erikschlegel/jarvis-vault
-/plugin install wiki-core@jarvis-vault
-/plugin install wiki-connector-x@jarvis-vault
+From your terminal, register this repo as a plugin marketplace, then install the plugins:
+
+```bash
+copilot plugin marketplace add erikschlegel/jarvis-vault
+copilot plugin install wiki-core@jarvis-vault
+copilot plugin install wiki-connector-x@jarvis-vault
 ```
 
-`wiki-core` is the engine and its ingest/query/lint skills; `wiki-connector-x` adds the X (Twitter) pre-ingest skills and depends on `wiki-core`. Installing the plugins gives you the skills; the deterministic engine still resolves your vault from `WIKI_VAULT`, so complete the [Setup](#setup) steps above regardless of how you install.
+To install a plugin straight from its subdirectory without registering the marketplace first:
+
+```bash
+copilot plugin install erikschlegel/jarvis-vault:plugins/wiki-core
+```
+
+Inside an interactive `copilot` session the equivalents are `/plugin marketplace add erikschlegel/jarvis-vault` and `/plugin install wiki-core@jarvis-vault`. Manage installs with `copilot plugin list`, `copilot plugin update --all`, and `copilot plugin uninstall NAME`.
+
+Installing the plugins gives you the skills; the deterministic engine still resolves your vault from `WIKI_VAULT`, so complete the [Setup](#setup) steps regardless of how you install.
 
 ## Workflow
 

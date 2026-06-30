@@ -28,6 +28,7 @@ import argparse
 import logging
 import re
 import sys
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,10 @@ DEFAULT_STATE = ingest_plan.DEFAULT_STATE
 SCAFFOLD_SENTINEL = (
     "<!-- SCAFFOLD: fill the Summary/Entities/Concepts sections, then delete this line -->"
 )
+
+# Placeholder headline shared by the frontmatter `title:` and the H1 so the agent
+# replaces both in one edit. OKF lists `title` as a reserved queryable field.
+TITLE_PLACEHOLDER = "TITLE — replace with a crafted, specific headline"
 
 LINK_TARGET_RE = re.compile(r"\]\(([^)]+)\)")
 
@@ -112,6 +117,7 @@ def build_scaffold(record: dict[str, Any], raw_text: str, *, ingested_date: str)
     fm_lines = [
         "---",
         "type: source",
+        f'title: "{TITLE_PLACEHOLDER}"',
         f'tweet_id: "{tweet_id}"',
     ]
     if author:
@@ -120,9 +126,10 @@ def build_scaffold(record: dict[str, Any], raw_text: str, *, ingested_date: str)
         fm_lines.append(f"author_handle: {handle}")
     fm_lines += [
         f"domain: {record['domain']}",
-        f"source_url: {url}",
+        f"resource: {url}",
         f"raw: {record['file']}",
-        f"ingested: {ingested_date}",
+        f"timestamp: {ingested_date}",
+        "tags: []",
         f"has_video: {str(has_video).lower()}",
         f"video_transcribed: {str(has_transcript).lower()}",
         "---",
@@ -134,7 +141,7 @@ def build_scaffold(record: dict[str, Any], raw_text: str, *, ingested_date: str)
     parts = [
         "\n".join(fm_lines),
         "",
-        "# TITLE — replace with a crafted, specific headline",
+        f"# {TITLE_PLACEHOLDER}",
         "",
         f"> {quote}",
         "",
@@ -237,6 +244,185 @@ def cmd_scaffold(args: argparse.Namespace) -> int:
         else:
             logger.info("scaffold: %s -> %s (%s)", tweet_id, page, status)
     return exit_code
+
+
+# --------------------------------------------------------------------------- #
+# migrate-okf
+# --------------------------------------------------------------------------- #
+H1_RE = re.compile(r"^#\s+(.+?)\s*$")
+# Frontmatter scalar key at the start of a line (block/list lines are left alone).
+FM_KEY_RE = re.compile(r"^([A-Za-z0-9_]+):")
+
+
+def _first_h1(text: str) -> str | None:
+    """The text of the first ``# H1`` heading, if any."""
+    for line in text.splitlines():
+        match = H1_RE.match(line)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _split_frontmatter(text: str) -> tuple[list[str], list[str]] | None:
+    """Split ``text`` into (frontmatter lines, body lines) including the fences.
+
+    Returns ``None`` when the text has no leading ``---`` frontmatter block.
+    The frontmatter list spans the opening fence through the closing fence; the
+    body list is everything after.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return lines[: i + 1], lines[i + 1 :]
+    return None  # unterminated frontmatter — treat as none
+
+
+def _fm_keys(fm_lines: list[str]) -> set[str]:
+    """The set of top-level scalar keys present in a frontmatter line list."""
+    keys: set[str] = set()
+    for line in fm_lines[1:-1]:
+        if line.startswith((" ", "\t")):
+            continue
+        match = FM_KEY_RE.match(line)
+        if match:
+            keys.add(match.group(1))
+    return keys
+
+
+def migrate_source_text(text: str) -> tuple[str, bool]:
+    """Bring one source page's frontmatter to OKF reserved names. Idempotent.
+
+    Renames ``source_url``→``resource`` and ``ingested``→``timestamp``, and
+    inserts ``title`` (from the H1) and ``tags: []`` when absent. Returns
+    ``(new_text, changed)``; ``changed`` is ``False`` for an already-migrated page.
+    """
+    split = _split_frontmatter(text)
+    if split is None:
+        return text, False
+    fm_lines, body = split
+    changed = False
+
+    renamed: list[str] = []
+    for line in fm_lines:
+        if line.startswith("source_url:"):
+            line = "resource:" + line[len("source_url:") :]
+            changed = True
+        elif line.startswith("ingested:"):
+            line = "timestamp:" + line[len("ingested:") :]
+            changed = True
+        renamed.append(line)
+
+    keys = _fm_keys(renamed)
+    # Insert `title` directly after the `type:` line (or the opening fence).
+    if "title" not in keys:
+        title = _first_h1(text) or TITLE_PLACEHOLDER
+        insert_at = 1
+        for idx, line in enumerate(renamed):
+            if line.startswith("type:"):
+                insert_at = idx + 1
+                break
+        renamed.insert(insert_at, f'title: "{title}"')
+        changed = True
+    # Append `tags: []` just before the closing fence.
+    if "tags" not in keys:
+        renamed.insert(len(renamed) - 1, "tags: []")
+        changed = True
+
+    if not changed:
+        return text, False
+    trailing = "\n" if text.endswith("\n") else ""
+    return "\n".join(renamed + body) + trailing, True
+
+
+def migrate_comparison_text(text: str) -> tuple[str, bool]:
+    """Ensure a comparison page carries the OKF ``type``/``title``/``tags``. Idempotent.
+
+    Pages lacking frontmatter get a fresh block (title derived from the H1);
+    pages with frontmatter gain any missing ``type``/``title``/``tags`` keys.
+    """
+    title = _first_h1(text) or TITLE_PLACEHOLDER
+    split = _split_frontmatter(text)
+    if split is None:
+        block = ["---", "type: comparison", f'title: "{title}"', "tags: []", "---", ""]
+        trailing = "\n" if text.endswith("\n") else ""
+        return "\n".join(block) + text.rstrip("\n") + trailing, True
+
+    fm_lines, body = split
+    keys = _fm_keys(fm_lines)
+    inner = fm_lines[1:-1]
+    changed = False
+    if "type" not in keys:
+        inner.insert(0, "type: comparison")
+        changed = True
+    if "title" not in keys:
+        inner.insert(1 if "type" not in keys else 0, f'title: "{title}"')
+        changed = True
+    if "tags" not in keys:
+        inner.append("tags: []")
+        changed = True
+    if not changed:
+        return text, False
+    trailing = "\n" if text.endswith("\n") else ""
+    return "\n".join(["---", *inner, "---", *body]) + trailing, True
+
+
+def _migrate_dir(
+    vault: Path, subdir: str, migrate: Callable[[str], tuple[str, bool]], *, dry_run: bool
+) -> tuple[int, int]:
+    """Apply ``migrate`` to every ``*.md`` under ``vault/subdir``.
+
+    Returns ``(changed, total)``. Writes in place unless ``dry_run``.
+    """
+    directory = vault / subdir
+    if not directory.is_dir():
+        return 0, 0
+    changed = 0
+    pages = sorted(directory.glob("*.md"))
+    for page in pages:
+        original = page.read_text(encoding="utf-8")
+        migrated, did_change = migrate(original)
+        if did_change:
+            changed += 1
+            verb = "would migrate" if dry_run else "migrated"
+            logger.info("migrate-okf: %s %s", verb, page)
+            if not dry_run:
+                page.write_text(migrated, encoding="utf-8")
+    return changed, len(pages)
+
+
+def cmd_migrate_okf(args: argparse.Namespace) -> int:
+    """Migrate existing vault pages to the Open Knowledge Format frontmatter."""
+    config = ingest_plan.load_json(args.config)
+    domain = args.domain or first_enabled_domain(config)
+    try:
+        vault = resolve_vault(config, domain, args.vault)
+    except ValueError as exc:
+        logger.error("migrate-okf: %s", exc)
+        return EXIT_FAILURE
+
+    if not vault.is_dir():
+        logger.error("migrate-okf: vault not found: %s", vault)
+        return EXIT_FAILURE
+
+    src_changed, src_total = _migrate_dir(
+        vault, "sources", migrate_source_text, dry_run=args.dry_run
+    )
+    cmp_changed, cmp_total = _migrate_dir(
+        vault, "comparisons", migrate_comparison_text, dry_run=args.dry_run
+    )
+    verb = "would update" if args.dry_run else "updated"
+    logger.info(
+        "migrate-okf: %s %d/%d source pages, %d/%d comparison pages in %s",
+        verb,
+        src_changed,
+        src_total,
+        cmp_changed,
+        cmp_total,
+        vault,
+    )
+    return EXIT_SUCCESS
 
 
 # --------------------------------------------------------------------------- #
@@ -397,6 +583,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Overwrite a page even if already filled."
     )
     p_scaffold.set_defaults(func=cmd_scaffold)
+
+    p_migrate = sub.add_parser(
+        "migrate-okf",
+        help="Rewrite existing source/comparison pages to OKF frontmatter (idempotent).",
+    )
+    p_migrate.set_defaults(func=cmd_migrate_okf)
 
     p_log = sub.add_parser("log-append", help="Append a structured log.md entry.")
     p_log.add_argument("--op", required=True, choices=["ingest", "query", "lint"])

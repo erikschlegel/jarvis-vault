@@ -26,7 +26,7 @@ Attachment images: `raw/assets/`.
 
 The wiki lives in the external Obsidian vault that `WIKI_VAULT` resolves to. Throughout this file, `wiki/` denotes that vault root (not a folder in this repo). The canonical structure below ships as a seed template in `plugins/wiki-core/templates/vault/`; copy it into a fresh vault to bootstrap it.
 
-```
+```text
 <WIKI_VAULT>/
   pulse.md       # recent-context cache — rewritten each session/ingest/query
   index.md       # content catalog — update on every ingest
@@ -40,6 +40,22 @@ The wiki lives in the external Obsidian vault that `WIKI_VAULT` resolves to. Thr
 ```
 
 New pages: lowercase kebab-case filenames, relative markdown links, cross-link aggressively, update `wiki/index.md`, note contradictions explicitly.
+
+### Frontmatter — Open Knowledge Format (OKF)
+
+Every page under `sources/`, `entities/`, `concepts/`, and `comparisons/` carries YAML frontmatter using the [Open Knowledge Format](https://openknowledge.foundation/) reserved keys. **OKF applies to vault pages only.** Repository files — `AGENTS.md`, `README.md`, the narrative docs, and any `SKILL.md` — are not OKF-scoped; only `SKILL.md` frontmatter is validated, by its own schema in `lint-docs`.
+
+Reserved keys the wiki uses (lowercase, top-level):
+
+| Key | Meaning | Notes |
+|-----|---------|-------|
+| `type` | Page kind | `source`, `entity`, `concept`, or `comparison`. The only hard-required key. |
+| `title` | Crafted, specific headline | Mirrors the page H1. |
+| `resource` | Canonical URL of the underlying source | Source pages (replaces the old `source_url`). |
+| `timestamp` | When the source was folded in | ISO date on source pages (replaces the old `ingested`). |
+| `tags` | Free-form labels | Optional; when present it must be a YAML list (e.g. `tags: []` or `tags: [agents, evals]`). |
+
+Producer extensions sit alongside the reserved keys: source pages keep `tweet_id`, `author`, `author_handle`, `domain`, `raw`, `has_video`, `video_transcribed`; entity pages keep `name`, `entity_kind`, `domain`; concept pages keep `name`, `domain`. The deterministic scaffolder (`uv run wiki-pages scaffold`) emits OKF-compliant source frontmatter, and `uv run wiki-pages migrate-okf` rewrites pre-OKF pages in place (idempotent). `index.md` and `log.md` are reserved-special roll-up artifacts and stay frontmatter-free, as do `overview.md`, `synthesis.md`, and `pulse.md`.
 
 ## Operations
 
@@ -149,6 +165,8 @@ The wiki is markdown first; the engine is an accelerator, not a gate. Three tier
 
 `get_pulse()` / `get_index()` are conveniences over `pulse.md` / `index.md`; when the server is unavailable, read those files directly. The MCP tools fail soft — an unset `WIKI_VAULT` or unbuilt index returns an actionable message rather than crashing — so a missing Tier 2 never blocks Tier 0 work.
 
+**First-run setup.** A fresh clone reaches all three tiers through `bash bin/setup.sh`, which installs the engine, seeds the vault, builds the index, and registers the MCP server. `uv run wiki-doctor` reports the state of every tier read-only. See [SETUP.md](SETUP.md) for the full walkthrough and [README.md](README.md) for the install paths.
+
 ## Optional tools
 
 At larger scale, add local search (e.g. [qmd](https://github.com/tobi/qmd)) — not required initially.
@@ -189,7 +207,16 @@ Use `uv run ruff format && uv run ruff check --fix` to apply fixes. Determinism 
 
 Scope note: `ruff` and `mypy` cover `plugins/*/src`, and `ruff` and `pytest` also cover `plugins/*/tests`. New code and tests are enforced automatically — keep them green. The `integration`-marked MCP contract test self-skips when the real index is not built; deselect it offline with `uv run pytest -m "not integration"`.
 
-This gate applies to code changes. The Ingest, Query, and Lint operations above write markdown to `wiki/`, not Python, so they do not trigger it.
+Two further deterministic gates cover the non-Python surface — repository markdown and committed secrets:
+
+```bash
+uv run lint-docs       # markdown structure + SKILL.md frontmatter schema
+uv run scan-secrets    # detect-secrets over git-tracked files vs .secrets.baseline
+```
+
+Run `uv run lint-docs` after editing any `*.md` (including any `SKILL.md`). It lints repository markdown structure with PyMarkdown — the line-length rule is relaxed for the house em-dash and bold-prefix style, the front-matter extension is enabled so skill frontmatter parses as data, and the vault seed templates under `templates/` are excluded — and it validates each skill manifest's frontmatter (`name` matches its directory, non-empty `description`, `user-invocable`, and a `metadata` block with `spec_version` and `last_updated`). Run `uv run scan-secrets` before committing; it runs detect-secrets over git-tracked files and fails on any finding not already recorded in the committed `.secrets.baseline` allowlist. Mark a confirmed false positive with an inline `# pragma: allowlist secret` comment, or re-audit the baseline with `uv run detect-secrets scan`.
+
+This gate applies to repository changes. The Ingest, Query, and Lint operations above write markdown to the external vault, not the repository, so `lint-docs` does not cover them — `wiki-verify` lints the vault. Editing repository markdown (`README`, `AGENTS`, any `SKILL.md`, and the rest) does trigger `lint-docs`.
 
 ## Boundaries
 

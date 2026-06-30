@@ -78,9 +78,11 @@ def test_seed_vault_missing_template_exits(tmp_path: Path) -> None:
 def test_diagnose_reports_unset_vault(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("WIKI_VAULT", raising=False)
     checks = wiki_init.diagnose()
-    assert len(checks) == 1
-    assert checks[0].name == "WIKI_VAULT"
-    assert checks[0].ok is False
+    by_name = {c.name: c for c in checks}
+    assert "python" in by_name
+    assert by_name["WIKI_VAULT"].ok is False
+    # Vault-dependent checks are skipped entirely when WIKI_VAULT is unset.
+    assert "vault directory" not in by_name
 
 
 def test_diagnose_reports_built_vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -93,13 +95,12 @@ def test_diagnose_reports_built_vault(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setenv("WIKI_VAULT", str(vault))
     monkeypatch.delenv("WIKI_INDEX_DIR", raising=False)
     checks = wiki_init.diagnose()
-    assert {c.name for c in checks} == {
-        "WIKI_VAULT",
-        "vault directory",
-        "index.md",
-        "search index",
-    }
-    assert all(c.ok for c in checks)
+    by_name = {c.name: c for c in checks}
+    vault_checks = {"WIKI_VAULT", "vault directory", "index.md", "search index"}
+    assert vault_checks <= set(by_name)
+    assert by_name["python"].ok
+    for name in vault_checks:
+        assert by_name[name].ok
 
 
 def test_mcp_snippet_embeds_vault(tmp_path: Path) -> None:
@@ -111,3 +112,53 @@ def test_mcp_snippet_embeds_vault(tmp_path: Path) -> None:
     assert "uvx" not in snippet
     assert "--directory" in snippet
     assert str(wiki_init._repo_root()) in snippet
+
+
+def test_copilot_mcp_snippet_emits_command_and_config(tmp_path: Path) -> None:
+    snippet = wiki_init.copilot_mcp_snippet(tmp_path / "wiki")
+    assert "copilot mcp add jarvis-vault" in snippet
+    assert "~/.copilot/mcp-config.json" in snippet
+    assert "mcpServers" in snippet
+    assert str(tmp_path / "wiki") in snippet
+    assert str(wiki_init._repo_root()) in snippet
+    assert "uvx" not in snippet
+
+
+def test_ensure_raw_root_creates_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = tmp_path / "vault" / "wiki"
+    vault.mkdir(parents=True)
+    monkeypatch.setenv("WIKI_VAULT", str(vault))
+    monkeypatch.delenv("WIKI_RAW", raising=False)
+    created = wiki_init.ensure_raw_root()
+    assert set(created) == {"raw", "raw/assets", "raw/x"}
+    raw = tmp_path / "vault" / "raw"
+    assert (raw / "assets").is_dir()
+    assert (raw / "x").is_dir()
+
+
+def test_ensure_raw_root_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = tmp_path / "vault" / "wiki"
+    vault.mkdir(parents=True)
+    monkeypatch.setenv("WIKI_VAULT", str(vault))
+    monkeypatch.delenv("WIKI_RAW", raising=False)
+    wiki_init.ensure_raw_root()
+    assert wiki_init.ensure_raw_root() == []
+
+
+def test_file_mentions_server_detects_quoted_key(tmp_path: Path) -> None:
+    config = tmp_path / "mcp.json"
+    config.write_text('// comment\n{"servers": {"jarvis-vault": {}}}\n', encoding="utf-8")
+    assert wiki_init._file_mentions_server(config, "jarvis-vault") is True
+    assert wiki_init._file_mentions_server(config, "other") is False
+    assert wiki_init._file_mentions_server(tmp_path / "missing.json", "jarvis-vault") is False
+
+
+def test_mcp_registrations_finds_vscode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".vscode").mkdir(parents=True)
+    (repo / ".vscode" / "mcp.json").write_text(
+        '{"servers": {"jarvis-vault": {}}}\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(wiki_init, "_repo_root", lambda: repo)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    assert wiki_init.mcp_registrations() == ["VS Code (.vscode/mcp.json)"]

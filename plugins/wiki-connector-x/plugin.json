@@ -4,5 +4,6 @@
   "version": "0.1.0",
   "description": "X (Twitter) connector for the LLM Wiki: import likes and bookmarks into raw/ as immutable source markdown (x-fetch, x-import, x-refresh-streams) and backfill local faster-whisper transcripts for caption-less videos (x-transcribe). Pre-ingest pipeline that feeds wiki-core; depends on wiki-core.",
   "publisher": "erikschlegel",
-  "skills": "skills"
+  "skills": "skills",
+  "commands": "commands"
 }

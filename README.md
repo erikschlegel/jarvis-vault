@@ -66,6 +66,8 @@ Inside an interactive `copilot` session the equivalents are `/plugin marketplace
 
 Installing the plugins gives you the skills; the deterministic engine still resolves your vault from `WIKI_VAULT`, so complete the [Setup](#setup) steps regardless of how you install.
 
+The plugins also register slash-commands you invoke explicitly — `/wiki`, `/ingest`, `/query`, `/lint`, `/save`, `/pending`, and `/setup` from `wiki-core`, plus `/x-import` and `/x-transcribe` from `wiki-connector-x`. They are thin wrappers that route to the matching skill; see each plugin README for the full list.
+
 ## Workflow
 
 1. Drop a source into `raw/` (Obsidian Web Clipper works well).

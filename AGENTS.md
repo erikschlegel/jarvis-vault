@@ -100,6 +100,22 @@ Look for:
 
 Suggest new questions and sources to investigate. Apply fixes with user approval. Append a `lint` entry to `wiki/log.md`.
 
+## Commands
+
+The plugins register slash-commands as thin entry points to the operations above; the workflow detail lives in the skills, not here. Command names differ from skill names because skills override commands of the same name.
+
+| Command | Operation | Routes to |
+|---------|-----------|-----------|
+| `/wiki` | — | Orientation dashboard: `wiki-doctor`, pulse, and the `wiki-plan` worklist |
+| `/ingest [source]` | Ingest | `wiki-ingest` skill; no argument ingests the next worklist item |
+| `/query <question>` | Query | `wiki-query` skill, answering with citations |
+| `/lint [domain]` | Lint | `wiki-lint` skill plus `wiki-verify` |
+| `/save [title]` | Query | File the current durable answer into `comparisons/` |
+| `/pending [domain]` | — | Read-only `wiki-plan` worklist summary |
+| `/setup` | — | `wiki-init` then `wiki-doctor` |
+| `/x-import [path]` | — | `x-import` skill (pre-ingest) |
+| `/x-transcribe` | — | `x-transcribe` skill (pre-ingest) |
+
 ## Indexing and logging
 
 ### `wiki/pulse.md` (recent-context cache)
@@ -159,7 +175,9 @@ The wiki is markdown first; the engine is an accelerator, not a gate. Three tier
 
 - **Tier 0 — files (always available).** Every wiki page, including `pulse.md` and `index.md`, is markdown on disk under `WIKI_VAULT`. Read and write it with native file tools at the vault path. Ingest, Query, and Lint all work at this tier with no package install: read `pulse.md` then `index.md` to orient, open pages directly, and write pages back. This is the Karpathy baseline.
 - **Tier 1 — `wiki-search` CLI.** Installing `wiki-core` adds hybrid BM25 + dense retrieval (`uv run wiki-search`) alongside the deterministic authoring and onboarding scripts catalogued in the Engine and layout section. Use it when scanning `index.md` by hand is too slow to find the right pages, or to scaffold/roll-up pages mechanically.
-- **Tier 2 — `jarvis-vault` MCP server.** `wiki-mcp` wraps the Tier 1 engine as MCP tools (`get_pulse`, `get_index`, `search_wiki`, `expand_neighbors`, `read_page`) for GUI and headless clients that prefer tool calls over a terminal. It reads the same files Tier 0 does, so anything it returns is also reachable by reading the vault directly. **If you are a GUI or desktop client (for example, the GitHub Copilot desktop app) with the `jarvis-vault` server available, prefer these MCP tools over shelling out to the Tier 1 CLI; in a terminal-capable session the CLI and MCP are interchangeable, so use whichever is more direct.**
+- **Tier 2 — `jarvis-vault` MCP server.** `wiki-mcp` wraps the Tier 1 engine as MCP tools (`get_pulse`, `get_index`, `search_wiki`, `expand_neighbors`, `read_page`) for GUI and headless clients that prefer tool calls over a terminal. It reads the same files Tier 0 does, so anything it returns is also reachable by reading the vault directly.
+
+**Tier selection — use the highest tier that is available and running; do not skip it.** When the wiki skills and the `jarvis-vault` MCP server are both installed and up, route Ingest, Query, and Lint through them (the skills for workflow, the MCP tools for retrieval) rather than dropping to the CLI or reading files ad hoc — this keeps processing consistent across GUI, desktop (for example, the GitHub Copilot app), and terminal clients. Drop to a lower tier only when a higher one is genuinely unavailable: no MCP server or skills → Tier 1 CLI; no `wiki-core` install → Tier 0 files. The one standing exception is the frontmatter-free roll-up artifacts the MCP surface does not expose — `log.md`, `overview.md`, and `synthesis.md` — which are always read directly at Tier 0 regardless of which tiers are up.
 
 `get_pulse()` / `get_index()` are conveniences over `pulse.md` / `index.md`; when the server is unavailable, read those files directly. The MCP tools fail soft — an unset `WIKI_VAULT` or unbuilt index returns an actionable message rather than crashing — so a missing Tier 2 never blocks Tier 0 work.
 
@@ -199,27 +217,10 @@ uv run lint-docs             # markdown structure + SKILL.md frontmatter schema
 uv run scan-secrets          # detect-secrets over git-tracked files vs .secrets.baseline
 ```
 
-A commit is permitted only when all six commands exit zero. This is a mandatory pre-commit gate, not a suggestion: never commit with a failing or unrun check. The per-surface detail below explains each check.
+A commit is permitted only when all six commands exit zero. This is a mandatory pre-commit gate, not a suggestion: never commit with a failing or unrun check. The checks split across two surfaces:
 
-The Python packages under `plugins/*/src/` are gated by deterministic linting and type checking. Run the gate after any change to that Python code, and before committing it:
-
-```bash
-uv run ruff format --check   # formatting is consistent
-uv run ruff check            # lint (fixed rule set, no auto-discovered plugins)
-uv run mypy                  # strict static types
-uv run pytest                # hermetic engine tests + MCP stdio contract
-```
-
-Apply fixes with `uv run ruff format && uv run ruff check --fix`. The gate is deterministic — `uv.lock` pins tool versions, the `ruff` rule set and `mypy --strict` are explicit in `pyproject.toml`, and `pytest` builds a throwaway index over a fixture vault rather than the live wiki — so a bare invocation equals the gate. It covers `plugins/*/src` and `plugins/*/tests`; the `integration`-marked MCP contract test self-skips offline (`uv run pytest -m "not integration"`).
-
-Two further deterministic gates cover the non-Python surface — repository markdown and committed secrets:
-
-```bash
-uv run lint-docs       # markdown structure + SKILL.md frontmatter schema
-uv run scan-secrets    # detect-secrets over git-tracked files vs .secrets.baseline
-```
-
-Run `uv run lint-docs` after editing any `*.md` — it validates PyMarkdown structure and each `SKILL.md` manifest's frontmatter (`name` matching its directory, a non-empty `description`, `user-invocable`, and a `metadata` block). Run `uv run scan-secrets` before committing; it fails on any finding not already in the committed `.secrets.baseline`. Mark a confirmed false positive with an inline `# pragma: allowlist secret`, or re-audit with `uv run detect-secrets scan`.
+- **Python (`plugins/*/src` and `plugins/*/tests`)** — the first four commands (`ruff format --check`, `ruff check`, `mypy`, `pytest`). Run them after any change to that Python code. Apply fixes with `uv run ruff format && uv run ruff check --fix`. The gate is deterministic — `uv.lock` pins tool versions, the `ruff` rule set and `mypy --strict` are explicit in `pyproject.toml`, and `pytest` builds a throwaway index over a fixture vault rather than the live wiki — so a bare invocation equals the gate. The `integration`-marked MCP contract test self-skips offline (`uv run pytest -m "not integration"`).
+- **Repository markdown and secrets** — the last two commands (`lint-docs`, `scan-secrets`). Run `lint-docs` after editing any `*.md`; it validates PyMarkdown structure and each `SKILL.md` manifest's frontmatter (`name` matching its directory, a non-empty `description`, `user-invocable`, and a `metadata` block). Run `scan-secrets` before committing; it fails on any finding not already in the committed `.secrets.baseline`. Mark a confirmed false positive with an inline `# pragma: allowlist secret`, or re-audit with `uv run detect-secrets scan`.
 
 This gate applies to repository changes. The Ingest, Query, and Lint operations above write markdown to the external vault, not the repository, so `lint-docs` does not cover them — `wiki-verify` lints the vault instead.
 

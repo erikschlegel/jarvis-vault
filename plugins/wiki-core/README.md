@@ -14,6 +14,20 @@ The agent loads the matching skill automatically based on your request.
 | [wiki-query](skills/wiki-query/SKILL.md) | Query | Answer questions against the wiki via the `jarvis-vault` MCP retrieval tools, with citations |
 | [wiki-lint](skills/wiki-lint/SKILL.md) | Lint | Health-check the wiki — broken links, orphans, contradictions, stale claims, gaps — and fix with approval |
 
+### Commands
+
+Slash-commands you invoke explicitly. They are thin wrappers that route to the matching skill, so the names differ from the skills (skills override commands of the same name).
+
+| Command | What it does |
+|---------|--------------|
+| `/wiki` | Orientation dashboard — health, recent context (pulse), and the pending ingest worklist |
+| `/ingest [source]` | Run the Ingest operation; no argument ingests the next worklist item |
+| `/query <question>` | Run the Query operation and answer with citations |
+| `/lint [domain]` | Run the Lint operation — deterministic checks plus semantic review |
+| `/save [title]` | File the current answer or analysis into the vault as a durable page |
+| `/pending [domain]` | Show the ingest worklist read-only |
+| `/setup` | Onboard or repair the engine — seed the vault, build the index, print the MCP entry |
+
 ### Console entry points
 
 Run any from the repo root with `uv run <entry-point>`.

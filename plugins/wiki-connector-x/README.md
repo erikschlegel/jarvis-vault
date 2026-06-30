@@ -13,6 +13,15 @@ The agent loads the matching skill automatically based on your request.
 | [x-import](skills/x-import/SKILL.md) | Pre-ingest | Clip X likes and bookmarks into `raw/` (API, account archive, bookmarks JSON, or Web Clipper folder) |
 | [x-transcribe](skills/x-transcribe/SKILL.md) | Pre-ingest | Backfill local ASR transcripts for caption-less X videos so their spoken content is ingestible |
 
+### Commands
+
+Slash-commands you invoke explicitly. They are thin wrappers that route to the matching skill.
+
+| Command | What it does |
+|---------|--------------|
+| `/x-import [path]` | Clip X likes and bookmarks into `raw/`; no argument pulls from the X API |
+| `/x-transcribe` | Backfill local transcripts for caption-less X videos |
+
 ### Console entry points
 
 Run any from the repo root with `uv run <entry-point>`.

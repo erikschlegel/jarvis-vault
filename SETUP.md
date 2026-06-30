@@ -138,7 +138,7 @@ From a local clone, point the marketplace command at the checkout instead: `copi
 copilot plugin install erikschlegel/jarvis-vault:plugins/wiki-core
 ```
 
-The interactive-session equivalents are `/plugin marketplace add` and `/plugin install`. You can also enable plugins declaratively through the `enabledPlugins` map (a `{ "spec": true }` object, not an array) in `~/.copilot/settings.json` (all projects) or `.github/copilot/settings.json` (this repo). When the `copilot` binary is absent, `bin/setup.sh` does this for you: it writes local-path specs (`<repo>/plugins/wiki-core` and `<repo>/plugins/wiki-connector-x`) into `enabledPlugins`, so a desktop-only user gets the skills wired without the CLI. Restart the Copilot desktop app afterward to load them.
+The interactive-session equivalents are `/plugin marketplace add` and `/plugin install`. You can also enable plugins declaratively through the `enabledPlugins` map (a `{ "spec": true }` object, not an array) in `~/.copilot/settings.json` (all projects) or `.github/copilot/settings.json` (this repo), using local-path specs such as `<repo>/plugins/wiki-core` and `<repo>/plugins/wiki-connector-x`. Restart the Copilot desktop app afterward to load them.
 
 The plugin delivers only the skills. The engine still resolves your vault from `WIKI_VAULT`, so run `bin/setup.sh` or the manual steps above, then verify with `uv run wiki-doctor`.
 

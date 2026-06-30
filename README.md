@@ -26,7 +26,7 @@ The deterministic engine is mandatory however you drive it: the skills and the M
 
 There are three ways in:
 
-1. **Clone and run setup (recommended).** One idempotent script detects your toolchain, seeds the vault, builds the index, and registers the MCP server:
+1. **Clone and run setup (recommended).** One idempotent script detects your toolchain, seeds the vault, builds the index, and prints the commands to install the skill plugins and register the MCP server:
 
    ```bash
    git clone https://github.com/erikschlegel/jarvis-vault.git

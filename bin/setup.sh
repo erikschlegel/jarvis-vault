@@ -4,8 +4,9 @@
 # First-run bootstrap for the jarvis-vault LLM Wiki engine.
 #
 # Standalone and pre-uv: detects the toolchain, installs what is missing (with
-# confirmation), creates and wires an external vault, seeds it via wiki-init,
-# and registers the MCP retrieval server. Idempotent and safe to re-run.
+# confirmation), creates and wires an external vault, and seeds it via
+# wiki-init. Prints the supported Copilot commands to install the skill plugins
+# and register the jarvis-vault MCP server. Idempotent and safe to re-run.
 #
 # Usage: bin/setup.sh [--check] [--yes] [--no-build]
 #                     [--vault-parent <dir>] [--vault-name <name>]
@@ -19,9 +20,7 @@ readonly SCRIPT_DIR
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
 readonly REPO_ROOT
 readonly MIN_PYTHON_MINOR=12
-readonly MCP_SERVER_NAME="jarvis-vault"
-readonly COPILOT_MCP_CONFIG="${HOME}/.copilot/mcp-config.json"
-readonly COPILOT_SETTINGS_CONFIG="${HOME}/.copilot/settings.json"
+readonly MARKETPLACE_NAME="jarvis-vault"
 readonly DEFAULT_VAULT_PARENT="${HOME}/obsidian"
 readonly DEFAULT_VAULT_NAME="jarvis-vault"
 readonly UV_INSTALL_URL="https://astral.sh/uv/install.sh"
@@ -326,157 +325,35 @@ relocate_obsidian_config() {
   fi
 }
 
-# --- MCP registration --------------------------------------------------------
+# --- Copilot setup hints -----------------------------------------------------
 
-# Idempotently merge a JSON object of entries into a top-level map key of a
-# Copilot JSON config (creating the file if needed), preserving any other keys.
-# Aborts untouched when the file is not a JSON object or the key is not a map.
-# Shared by the MCP-server writer here and the plugin-enablement writer below.
-merge_copilot_map() {
-  local config_path="$1" key="$2" entries="$3"
-  mkdir -p "$(dirname -- "${config_path}")"
-  JV_CONFIG_PATH="${config_path}" \
-  JV_KEY="${key}" \
-  JV_ENTRIES="${entries}" \
-    uv_run python - <<'PY'
-import json
-import os
-from pathlib import Path
-
-config_path = Path(os.environ["JV_CONFIG_PATH"])
-key = os.environ["JV_KEY"]
-entries = json.loads(os.environ["JV_ENTRIES"])
-
-data: dict = {}
-if config_path.exists():
-    try:
-        loaded = json.loads(config_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"{config_path} is not valid JSON ({exc}); leaving it untouched.")
-    if not isinstance(loaded, dict):
-        raise SystemExit(f"{config_path} is not a JSON object; leaving it untouched.")
-    data = loaded
-
-section = data.setdefault(key, {})
-if not isinstance(section, dict):
-    raise SystemExit(f"'{key}' in {config_path} is not an object; leaving it untouched.")
-
-section.update(entries)
-config_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-PY
-}
-
-# Register the jarvis-vault server in ~/.copilot/mcp-config.json, the config the
-# GitHub Copilot CLI and desktop app both read. Used when the `copilot` binary
-# is unavailable to run `copilot mcp add`.
-write_copilot_mcp_config() {
-  local entries
-  entries="$(
-    JV_NAME="${MCP_SERVER_NAME}" \
-    JV_REPO="${REPO_ROOT}" \
-    JV_VAULT="${WIKI_VAULT_PATH}" \
-      uv_run python - <<'PY'
-import json
-import os
-
-print(json.dumps({
-    os.environ["JV_NAME"]: {
-        "type": "local",
-        "command": "uv",
-        "args": ["run", "--directory", os.environ["JV_REPO"], "wiki-mcp"],
-        "env": {"WIKI_VAULT": os.environ["JV_VAULT"]},
-        "tools": ["*"],
-    }
-}))
-PY
-  )"
-  merge_copilot_map "${COPILOT_MCP_CONFIG}" "mcpServers" "${entries}"
-}
-
-register_mcp() {
-  log "Registering the MCP retrieval server"
+# Print the supported Copilot commands: install the skill plugins from the local
+# marketplace (.github/plugin/marketplace.json), then register the jarvis-vault
+# MCP retrieval server. The skills ship as plugins; the MCP server is registered
+# separately (its `wiki-mcp` launcher is this repo's engine, so it stays pinned
+# to ${REPO_ROOT} rather than being copied out with a plugin). Skills work from
+# files alone, but the server adds hybrid search instead of Tier-0 file reads.
+# This script intentionally does not write to ~/.copilot/*; these commands are
+# the supported, forward-compatible channel for both the CLI and the desktop app.
+print_plugin_steps() {
+  log "Copilot skills (plugins) and MCP server"
 
   if [[ -f "${REPO_ROOT}/.vscode/mcp.json" ]]; then
-    info "VS Code: .vscode/mcp.json present (auto-discovered after trust)."
-  else
-    warn "VS Code: .vscode/mcp.json missing; see SETUP.md to add it."
+    info "VS Code: .vscode/mcp.json is auto-discovered after you trust the repo."
   fi
 
-  if have copilot; then
-    if copilot mcp get "${MCP_SERVER_NAME}" &>/dev/null; then
-      info "Copilot CLI: '${MCP_SERVER_NAME}' already registered."
-    elif confirm "Register '${MCP_SERVER_NAME}' with the GitHub Copilot CLI?"; then
-      copilot mcp add "${MCP_SERVER_NAME}" -- \
-        uv run --directory "${REPO_ROOT}" wiki-mcp
-      info "Copilot CLI: registered '${MCP_SERVER_NAME}'."
-    else
-      info "Skipped Copilot CLI registration. Run later:"
-      info "  copilot mcp add ${MCP_SERVER_NAME} -- uv run --directory ${REPO_ROOT} wiki-mcp"
-    fi
-  else
-    info "Copilot CLI not found; wiring the desktop/CLI config directly."
-    if [[ -f "${COPILOT_MCP_CONFIG}" ]] && grep -q "\"${MCP_SERVER_NAME}\"" "${COPILOT_MCP_CONFIG}"; then
-      info "Copilot config: '${MCP_SERVER_NAME}' already in ${COPILOT_MCP_CONFIG}."
-    elif confirm "Write '${MCP_SERVER_NAME}' to ${COPILOT_MCP_CONFIG}?"; then
-      if write_copilot_mcp_config; then
-        info "Copilot config: registered '${MCP_SERVER_NAME}' in ${COPILOT_MCP_CONFIG}."
-        info "Restart the Copilot desktop app to load it."
-      else
-        warn "Could not write ${COPILOT_MCP_CONFIG}; see SETUP.md for the manual block."
-      fi
-    else
-      info "Skipped. Add the ~/.copilot/mcp-config.json block from SETUP.md to wire it later."
-    fi
+  if ! have copilot; then
+    info "GitHub Copilot CLI not found. Install it first, then run the commands below:"
+    info "  https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli"
   fi
-}
 
-# --- Plugin (skills) enablement ----------------------------------------------
-
-# Enable the wiki skill plugins in the `enabledPlugins` map of
-# ~/.copilot/settings.json, the declarative plugin auto-install field read by
-# the GitHub Copilot CLI and cloud agent. Used when the `copilot` binary is
-# unavailable to run `copilot plugin install`. Keys are local-path plugin specs
-# (the same form `copilot plugin install /abs/path` accepts), so no marketplace
-# registration is required.
-write_copilot_plugins_config() {
-  local entries
-  entries="$(
-    JV_CORE="${REPO_ROOT}/plugins/wiki-core" \
-    JV_CONNECTOR="${REPO_ROOT}/plugins/wiki-connector-x" \
-      uv_run python - <<'PY'
-import json
-import os
-
-print(json.dumps({os.environ["JV_CORE"]: True, os.environ["JV_CONNECTOR"]: True}))
-PY
-  )"
-  merge_copilot_map "${COPILOT_SETTINGS_CONFIG}" "enabledPlugins" "${entries}"
-}
-
-register_plugins() {
-  log "Enabling the skill plugins"
-
-  if have copilot; then
-    info "Copilot CLI: enable the skill plugins (see SETUP.md):"
-    info "  copilot plugin marketplace add ${REPO_ROOT}"
-    info "  copilot plugin install wiki-core@${MCP_SERVER_NAME}"
-    info "  copilot plugin install wiki-connector-x@${MCP_SERVER_NAME}"
-  else
-    info "Copilot CLI not found; enabling skills via the desktop/CLI settings."
-    if [[ -f "${COPILOT_SETTINGS_CONFIG}" ]] \
-      && grep -qF "${REPO_ROOT}/plugins/wiki-core" "${COPILOT_SETTINGS_CONFIG}"; then
-      info "Copilot settings: skill plugins already enabled in ${COPILOT_SETTINGS_CONFIG}."
-    elif confirm "Enable the skill plugins in ${COPILOT_SETTINGS_CONFIG}?"; then
-      if write_copilot_plugins_config; then
-        info "Copilot settings: enabled skill plugins in ${COPILOT_SETTINGS_CONFIG}."
-        info "Restart the Copilot desktop app to load them."
-      else
-        warn "Could not write ${COPILOT_SETTINGS_CONFIG}; see SETUP.md to enable them manually."
-      fi
-    else
-      info "Skipped. See SETUP.md to enable the skill plugins later."
-    fi
-  fi
+  info "1) Install the skill plugins from the local marketplace:"
+  info "   copilot plugin marketplace add ${REPO_ROOT}"
+  info "   copilot plugin install wiki-core@${MARKETPLACE_NAME}"
+  info "   copilot plugin install wiki-connector-x@${MARKETPLACE_NAME}"
+  info "2) Register the jarvis-vault MCP server (hybrid search):"
+  info "   copilot mcp add jarvis-vault -- uv run --directory ${REPO_ROOT} wiki-mcp"
+  info "Restart the Copilot desktop app to load the skills and the MCP server."
 }
 
 # --- Verification ------------------------------------------------------------
@@ -516,9 +393,8 @@ main() {
   ensure_deps
   ensure_env_and_vault
   run_wiki_init
-  register_mcp
-  register_plugins
   verify
+  print_plugin_steps
 }
 
 main "$@"

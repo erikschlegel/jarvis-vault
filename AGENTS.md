@@ -161,7 +161,7 @@ The wiki is markdown first; the engine is an accelerator, not a gate. Three tier
 
 `get_pulse()` / `get_index()` are conveniences over `pulse.md` / `index.md`; when the server is unavailable, read those files directly. The MCP tools fail soft — an unset `WIKI_VAULT` or unbuilt index returns an actionable message rather than crashing — so a missing Tier 2 never blocks Tier 0 work.
 
-**First-run setup.** A fresh clone reaches all three tiers through `bash bin/setup.sh`, which installs the engine, seeds the vault, builds the index, and registers the MCP server. `uv run wiki-doctor` reports the state of every tier read-only. See [SETUP.md](SETUP.md) for the full walkthrough and [README.md](README.md) for the install paths.
+**First-run setup.** A fresh clone reaches all three tiers through `bash bin/setup.sh`, which installs the engine, seeds the vault, builds the index, and prints the commands to install the skill plugins and register the MCP server. `uv run wiki-doctor` reports the state of every tier read-only. See [SETUP.md](SETUP.md) for the full walkthrough and [README.md](README.md) for the install paths.
 
 ## Engine and layout
 

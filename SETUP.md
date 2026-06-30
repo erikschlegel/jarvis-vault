@@ -74,7 +74,7 @@ If you would rather run each step yourself:
 
    Re-running is safe: it never overwrites existing pages. Pass `--force` to re-copy the template or `--no-build` to skip the index build when offline.
 
-4. The seed template places its `.obsidian/` config inside the wiki folder. The graph view is tuned to `path:wiki/`, so move that config up to the vault root once:
+4. The seed template places its `.obsidian/` config inside the wiki folder. The graph view is tuned to `path:wiki/` (so `raw/` stays out of the graph) and color-codes `entities`, `concepts`, `sources`, and `comparisons`; the shipped `.obsidian/workspace.json` also opens a fresh vault straight into the Graph view, with file-explorer/search/bookmarks docked left and backlinks/outgoing-links/tags/properties/outline collapsed right (first launch only — Obsidian rewrites `workspace.json` thereafter, which is why the live copy is gitignored). Move that config up to the vault root once so it applies:
 
    ```bash
    mv /path/to/your-vault/wiki/.obsidian /path/to/your-vault/.obsidian

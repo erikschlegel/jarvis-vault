@@ -28,7 +28,7 @@ The wiki lives in the external Obsidian vault that `WIKI_VAULT` resolves to. Thr
 
 ```text
 <WIKI_VAULT>/
-  pulse.md       # recent-context cache — rewritten each session/ingest/query
+  pulse.md       # recent-context cache — refreshed on ingest and query
   index.md       # content catalog — update on every ingest
   log.md         # append-only timeline
   overview.md    # high-level map
@@ -55,7 +55,7 @@ Reserved keys the wiki uses (lowercase, top-level):
 | `timestamp` | When the source was folded in | ISO date on source pages (replaces the old `ingested`). |
 | `tags` | Free-form labels | Optional; when present it must be a YAML list (e.g. `tags: []` or `tags: [agents, evals]`). |
 
-Producer extensions sit alongside the reserved keys: source pages keep `tweet_id`, `author`, `author_handle`, `domain`, `raw`, `has_video`, `video_transcribed`; entity pages keep `name`, `entity_kind`, `domain`; concept pages keep `name`, `domain`. The deterministic scaffolder (`uv run wiki-pages scaffold`) emits OKF-compliant source frontmatter, and `uv run wiki-pages migrate-okf` rewrites pre-OKF pages in place (idempotent). `index.md` and `log.md` are reserved-special roll-up artifacts and stay frontmatter-free, as do `overview.md`, `synthesis.md`, and `pulse.md`.
+Producer extensions sit alongside the reserved keys (source pages add `tweet_id`/`author`/`domain`/`has_video` and the like, entity and concept pages add `name`/`entity_kind`/`domain`) — the deterministic scaffolder (`uv run wiki-pages scaffold`) emits them, and `uv run wiki-pages migrate-okf` rewrites pre-OKF pages in place. The roll-up artifacts — `index.md`, `log.md`, `overview.md`, `synthesis.md`, `pulse.md` — stay frontmatter-free.
 
 ## Operations
 
@@ -127,16 +127,12 @@ Parseable with: `grep "^## \[" wiki/log.md | tail -5`
 
 ## Obsidian and git
 
-The wiki and the raw sources are siblings inside an external Obsidian vault: the wiki root is resolved via `WIKI_VAULT` (`<vault>/wiki`) and the raw sources sit beside it at `<vault>/raw`. This repo holds the engine and the skills that populate them. The repo is tracked with git; the vault is markdown on disk, synced by Obsidian.
+The wiki and the raw sources are siblings inside an external Obsidian vault: the wiki root is `WIKI_VAULT` and the raw sources sit beside it at `WIKI_RAW` (default `${WIKI_VAULT}/../raw`). This repo holds the engine and the skills that populate them. The repo is tracked with git; the vault is markdown on disk, synced by Obsidian.
 
 - **Obsidian Web Clipper** → save articles into `raw/`
 - **Attachment folder:** `raw/assets/` (configured in the vault's `.obsidian/app.json`)
-- **Download attachments for current file** hotkey after clipping (e.g. Ctrl+Shift+D)
-- **Graph view** to see wiki shape, hubs, and orphans. The seed template ships a tuned `.obsidian/graph.json` that filters to `path:wiki/` (so `raw/` stays out of the graph) and color-codes `entities`, `concepts`, `sources`, and `comparisons`. Copy it into the live vault's `.obsidian/` to apply the same defaults.
-- **Default layout** — the seed template also ships `.obsidian/workspace.json` so a fresh vault opens straight into the Graph view, with file-explorer/search/bookmarks in the left sidebar and backlinks/outgoing-links/tags/properties/outline collapsed on the right. This only seeds the first launch; the live vault's `workspace.json` is gitignored because Obsidian rewrites it on every layout change.
-- Optional: **Dataview** if you add YAML frontmatter; **Marp** for slides from wiki content
 
-For images in sources: read text first, then view referenced images separately if needed.
+The seed template's tuned `.obsidian/` config — graph view filtered to `path:wiki/` and a default layout — is documented in [SETUP.md](SETUP.md). For images in sources: read text first, then view referenced images separately if needed.
 
 ### X tweet sources with video (`raw/x/`)
 
@@ -160,16 +156,12 @@ Do not download MP4s into the repo unless the user explicitly asks. Prefer `vide
 The wiki is markdown first; the engine is an accelerator, not a gate. Three tiers, each a superset of the one below:
 
 - **Tier 0 — files (always available).** Every wiki page, including `pulse.md` and `index.md`, is markdown on disk under `WIKI_VAULT`. Read and write it with native file tools at the vault path. Ingest, Query, and Lint all work at this tier with no package install: read `pulse.md` then `index.md` to orient, open pages directly, and write pages back. This is the Karpathy baseline.
-- **Tier 1 — `wiki-search` CLI.** Installing `wiki-core` adds hybrid BM25 + dense retrieval (`uv run wiki-search`) plus the deterministic authoring helpers (`wiki-pages`, `wiki-plan`, `wiki-verify`) and onboarding (`wiki-init`, `wiki-doctor`). Use it when scanning `index.md` by hand is too slow to find the right pages, or to scaffold/roll-up pages mechanically.
-- **Tier 2 — `jarvis-vault` MCP server.** `wiki-mcp` wraps the Tier 1 engine as MCP tools (`get_pulse`, `get_index`, `search_wiki`, `expand_neighbors`, `read_page`) for GUI and headless clients that prefer tool calls over a terminal. It reads the same files Tier 0 does, so anything it returns is also reachable by reading the vault directly.
+- **Tier 1 — `wiki-search` CLI.** Installing `wiki-core` adds hybrid BM25 + dense retrieval (`uv run wiki-search`) alongside the deterministic authoring and onboarding scripts catalogued in the Engine and layout section. Use it when scanning `index.md` by hand is too slow to find the right pages, or to scaffold/roll-up pages mechanically.
+- **Tier 2 — `jarvis-vault` MCP server.** `wiki-mcp` wraps the Tier 1 engine as MCP tools (`get_pulse`, `get_index`, `search_wiki`, `expand_neighbors`, `read_page`) for GUI and headless clients that prefer tool calls over a terminal. It reads the same files Tier 0 does, so anything it returns is also reachable by reading the vault directly. **If you are a GUI or desktop client (for example, the GitHub Copilot desktop app) with the `jarvis-vault` server available, prefer these MCP tools over shelling out to the Tier 1 CLI; in a terminal-capable session the CLI and MCP are interchangeable, so use whichever is more direct.**
 
 `get_pulse()` / `get_index()` are conveniences over `pulse.md` / `index.md`; when the server is unavailable, read those files directly. The MCP tools fail soft — an unset `WIKI_VAULT` or unbuilt index returns an actionable message rather than crashing — so a missing Tier 2 never blocks Tier 0 work.
 
 **First-run setup.** A fresh clone reaches all three tiers through `bash bin/setup.sh`, which installs the engine, seeds the vault, builds the index, and registers the MCP server. `uv run wiki-doctor` reports the state of every tier read-only. See [SETUP.md](SETUP.md) for the full walkthrough and [README.md](README.md) for the install paths.
-
-## Optional tools
-
-At larger scale, add local search (e.g. [qmd](https://github.com/tobi/qmd)) — not required initially.
 
 ## Engine and layout
 
@@ -185,8 +177,8 @@ Locations resolve from environment variables, with a vault-relative default so a
 | Variable | Selects | Default |
 |----------|---------|---------|
 | `WIKI_VAULT` | Obsidian vault wiki root (holds `index.md`) — any synced or local folder | the author's personal vault fallback; set this to your own |
-| `WIKI_RAW` | immutable raw sources root (the sibling of the wiki) | `<vault>/../raw` |
-| `WIKI_INDEX_DIR` | retrieval index home | `<vault>/.wiki_index` |
+| `WIKI_RAW` | immutable raw sources root (the sibling of the wiki) | `${WIKI_VAULT}/../raw` |
+| `WIKI_INDEX_DIR` | retrieval index home | `${WIKI_VAULT}/.wiki_index` |
 | `WIKI_STATE` | ingest manifest | `<index>/ingest_state.json` |
 | `WIKI_CONFIG` | ingest config | `<index>/ingest_config.json` |
 
@@ -203,9 +195,7 @@ uv run mypy                  # strict static types
 uv run pytest                # hermetic engine tests + MCP stdio contract
 ```
 
-Use `uv run ruff format && uv run ruff check --fix` to apply fixes. Determinism comes from four places: `uv.lock` pins exact tool versions, the `ruff` rule set in `pyproject.toml` is explicit, `mypy` runs in `strict` mode, and `pytest` builds a throwaway index over a fixture vault in `tmp_path` rather than the live wiki. Each tool is configured to target only the enforced surface, so a bare invocation equals the gate.
-
-Scope note: `ruff` and `mypy` cover `plugins/*/src`, and `ruff` and `pytest` also cover `plugins/*/tests`. New code and tests are enforced automatically — keep them green. The `integration`-marked MCP contract test self-skips when the real index is not built; deselect it offline with `uv run pytest -m "not integration"`.
+Apply fixes with `uv run ruff format && uv run ruff check --fix`. The gate is deterministic — `uv.lock` pins tool versions, the `ruff` rule set and `mypy --strict` are explicit in `pyproject.toml`, and `pytest` builds a throwaway index over a fixture vault rather than the live wiki — so a bare invocation equals the gate. It covers `plugins/*/src` and `plugins/*/tests`; the `integration`-marked MCP contract test self-skips offline (`uv run pytest -m "not integration"`).
 
 Two further deterministic gates cover the non-Python surface — repository markdown and committed secrets:
 
@@ -214,9 +204,9 @@ uv run lint-docs       # markdown structure + SKILL.md frontmatter schema
 uv run scan-secrets    # detect-secrets over git-tracked files vs .secrets.baseline
 ```
 
-Run `uv run lint-docs` after editing any `*.md` (including any `SKILL.md`). It lints repository markdown structure with PyMarkdown — the line-length rule is relaxed for the house em-dash and bold-prefix style, the front-matter extension is enabled so skill frontmatter parses as data, and the vault seed templates under `templates/` are excluded — and it validates each skill manifest's frontmatter (`name` matches its directory, non-empty `description`, `user-invocable`, and a `metadata` block with `spec_version` and `last_updated`). Run `uv run scan-secrets` before committing; it runs detect-secrets over git-tracked files and fails on any finding not already recorded in the committed `.secrets.baseline` allowlist. Mark a confirmed false positive with an inline `# pragma: allowlist secret` comment, or re-audit the baseline with `uv run detect-secrets scan`.
+Run `uv run lint-docs` after editing any `*.md` — it validates PyMarkdown structure and each `SKILL.md` manifest's frontmatter (`name` matching its directory, a non-empty `description`, `user-invocable`, and a `metadata` block). Run `uv run scan-secrets` before committing; it fails on any finding not already in the committed `.secrets.baseline`. Mark a confirmed false positive with an inline `# pragma: allowlist secret`, or re-audit with `uv run detect-secrets scan`.
 
-This gate applies to repository changes. The Ingest, Query, and Lint operations above write markdown to the external vault, not the repository, so `lint-docs` does not cover them — `wiki-verify` lints the vault. Editing repository markdown (`README`, `AGENTS`, any `SKILL.md`, and the rest) does trigger `lint-docs`.
+This gate applies to repository changes. The Ingest, Query, and Lint operations above write markdown to the external vault, not the repository, so `lint-docs` does not cover them — `wiki-verify` lints the vault instead.
 
 ## Boundaries
 

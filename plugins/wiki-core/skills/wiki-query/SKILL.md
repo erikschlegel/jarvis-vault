@@ -4,14 +4,14 @@ description: "Answer questions against the jarvis-vault LLM Wiki using the jarvi
 user-invocable: true
 metadata:
   spec_version: "1.0"
-  last_updated: "2026-06-27"
+  last_updated: "2026-06-30"
 ---
 
 # Wiki Query Skill
 
 ## Overview
 
-This skill runs the **Query** operation defined in [AGENTS.md](../../../../AGENTS.md) against the LLM Wiki. The wiki is an interlinked markdown knowledge base living in an Obsidian vault outside the workspace (its location resolves from `WIKI_VAULT`). It is plain files: you can always read and write any page with native file tools at the vault path (Tier 0). The `jarvis-vault` MCP server (Tier 2) is a retrieval *accelerator* over those same files — prefer it for **search** (finding which pages answer a question), but reading a page you already know the path of, or writing a page back, works directly through file tools. See the AGENTS.md "Access tiers" section.
+This skill runs the **Query** operation defined in [AGENTS.md](../../../../AGENTS.md) against the LLM Wiki. The wiki is an interlinked markdown knowledge base living in an Obsidian vault outside the workspace (its location resolves from `WIKI_VAULT`). It is plain files: you can always read and write any page with native file tools at the vault path (Tier 0). The `jarvis-vault` MCP server (Tier 2) is a retrieval *accelerator* over those same files — prefer it for **search** (finding which pages answer a question), while reading a page you already know the path of, or writing one back, works directly through file tools. When you are running as a GUI or desktop client (for example, the GitHub Copilot desktop app) and the server is available, prefer these MCP tools over shelling out to the Tier 1 CLI; in a terminal-capable session the two are interchangeable, so use whichever is more direct. See the AGENTS.md "Access tiers" section.
 
 The retrieval engine is hybrid: BM25 keyword search and on-device dense embeddings, fused with reciprocal-rank fusion, over heading-level chunks of every page. Trust it over recall: the index reflects the vault's current state, your memory of prior sessions does not.
 
@@ -63,4 +63,4 @@ The index is derived and rebuildable. If results seem stale or a page you expect
 - `uv run wiki-search build --incremental` — re-embeds only changed pages (content-hash gated).
 - `uv run wiki-search build` — full rebuild.
 
-The index lives under `<vault>/.wiki_index/` (override with `WIKI_INDEX_DIR`) and is outside the repo. A first build (or an embedding-model change) re-embeds every page; subsequent incremental builds touch only what changed.
+The index lives under `${WIKI_VAULT}/.wiki_index/` (override with `WIKI_INDEX_DIR`) and is outside the repo.

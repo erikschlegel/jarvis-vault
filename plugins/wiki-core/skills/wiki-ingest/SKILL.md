@@ -4,7 +4,7 @@ description: "Process an immutable raw/ source into the jarvis-vault LLM Wiki �
 user-invocable: true
 metadata:
   spec_version: "1.0"
-  last_updated: "2026-06-28"
+  last_updated: "2026-06-30"
 ---
 
 # Wiki Ingest Skill
@@ -14,6 +14,8 @@ metadata:
 This skill runs the **Ingest** operation defined in [AGENTS.md](../../../../AGENTS.md) against the LLM Wiki. Ingest takes one immutable source from `raw/` and integrates it into the interlinked markdown wiki — it does not merely index the source for later retrieval. A single source typically touches 10–15 wiki pages.
 
 The wiki lives in an Obsidian vault outside the workspace (its location resolves from `WIKI_VAULT`). Source files live in the workspace under `raw/`; wiki pages are written to the vault. Karpathy's rule holds: process **one source at a time, with the user involved**. Never modify `raw/` during ingest — sources are immutable inputs.
+
+When you are running as a GUI or desktop client (for example, the GitHub Copilot desktop app) and the `jarvis-vault` server is available, prefer its MCP read tools (`get_pulse`, `search_wiki`, `read_page`) for the orientation and lookup steps — checking the pulse and finding existing entity or concept pages to update — rather than shelling out; page writes, index/log helpers, and manifest updates still go through the Tier 1 CLI and file tools.
 
 ## When to ingest
 
@@ -31,9 +33,9 @@ uv run wiki-plan --json      # machine-readable worklist
 uv run wiki-plan --domain ai-swe   # restrict to one domain
 ```
 
-It is read-only by default and buckets every source into `new` / `pending` / `changed` / `missing` / `parked` / `noise` / `up_to_date`. The worklist is `new + pending + changed + missing` — sources in enabled domains that still need work. `parked` (disabled domain), `noise`, and `up_to_date` are excluded. Pass `--update-manifest` to persist proposed domain classifications and content hashes (setting `pending` for enabled-domain sources and `parked` for disabled ones); it never rewrites an `ingested` or `noise` entry unless the raw body hash changed.
+It is read-only by default and buckets every source into `new` / `pending` / `changed` / `missing` / `parked` / `noise` / `up_to_date`. The worklist is `new + pending + changed + missing` — enabled-domain sources that still need work; `parked`, `noise`, and `up_to_date` are excluded. Pass `--update-manifest` to persist the proposed domain classifications and content hashes.
 
-After a source's vault page is written, finalize it in the manifest with the engine — never hand-edit the ingest manifest (`<vault>/.wiki_index/ingest_state.json`):
+After a source's vault page is written, finalize it in the manifest with the engine — never hand-edit the ingest manifest (`${WIKI_VAULT}/.wiki_index/ingest_state.json`):
 
 ```bash
 uv run wiki-plan --mark-ingested <tweet_id> [<tweet_id> ...]
@@ -41,21 +43,21 @@ uv run wiki-plan --mark-ingested <tweet_id> [<tweet_id> ...]
 
 `--mark-ingested` flips each given source to status `ingested`, re-hashes its raw body, and records its `wiki_page`. It verifies the destination vault page exists first and refuses (non-zero exit, leaving the entry untouched) any id whose page is missing, so the manifest never claims an un-written page; pass `--allow-missing-page` only to override deliberately. Accept several ids at once to finalize a whole batch in one call.
 
-Ingest one source at a time by default — surface the candidate to the user first. To clear a backlog of thin, related sources faster, use the bounded **Batch mode** below instead of one approval per source. Never batch silently.
+Ingest one source at a time by default; to clear a backlog of thin, related sources, use the bounded **Batch mode** below. Never batch silently.
 
 ## Write protocol
 
 Per the AGENTS.md Ingest operation, write in this order so cross-links resolve and the big picture stays current:
 
 1. **Read** the source and any `raw/assets/` it references (images, transcripts). Discuss key takeaways with the user when useful.
-2. **Source summary** — scaffold the page skeleton deterministically, then fill it. `uv run wiki-pages scaffold <tweet_id>` writes `wiki/sources/<slug>.md` with OKF-compliant frontmatter (`type: source`, a `title` placeholder, derived slug, handle, `resource` URL, `timestamp`, `tags: []`, `has_video`/`video_transcribed` flags), a blockquote of the cleaned body, the `**Source:**` line, and `## Summary` / `## Entities` / `## Concepts` stubs marked by a scaffold sentinel. Then replace the placeholder `title` and the `_TODO:_` stubs with real content — craft a specific headline, summarize the source, and link the entities and concepts it raises. Scaffold is idempotent: it refuses to overwrite a page you have already filled (the sentinel is gone) unless you pass `--force`, and re-running over an untouched stub just rewrites it. Use `--dry-run` to preview the destination path. To bring pre-OKF pages up to the current frontmatter, run `uv run wiki-pages migrate-okf` (idempotent; renames `source_url`→`resource` and `ingested`→`timestamp`, and adds `title`/`tags` where missing).
+2. **Source summary** — `uv run wiki-pages scaffold <tweet_id>` writes `wiki/sources/<slug>.md` with OKF frontmatter, a blockquote of the cleaned body, the `**Source:**` line, and `## Summary` / `## Entities` / `## Concepts` stubs marked by a scaffold sentinel. Then replace the placeholder `title` and the `_TODO:_` stubs with real content — craft a specific headline, summarize the source, and link the entities and concepts it raises. Scaffold is idempotent: it refuses to overwrite a filled page (sentinel gone) unless you pass `--force`. (One-off: `uv run wiki-pages migrate-okf` brings pre-OKF pages up to the current frontmatter.)
 3. **Entities** — create or update `wiki/entities/*` pages for each person, org, product, place, or work the source covers. Carry OKF frontmatter (`type: entity`, `title`, `name`, optional `entity_kind`, `domain`, and an optional `tags` list). Add the new source as a citation; note contradictions explicitly.
 4. **Concepts** — create or update `wiki/concepts/*` pages for the topics, themes, and methods involved. Carry OKF frontmatter (`type: concept`, `title`, `name`, `domain`, and an optional `tags` list). Cross-link aggressively.
 5. **Overview / synthesis** — update `wiki/overview.md` and `wiki/synthesis.md` only when the source shifts the high-level map or the evolving thesis.
 6. **Index** — add the new source page (and any new entity/concept pages) to `wiki/index.md` with `uv run wiki-pages index-add --section "<heading>" --entry "[Title](sources/<slug>.md) — one-line summary."`. It inserts the bullet under the named section, dedupes on the link target (re-running is a no-op), and never hand-matches anchors. Repeat per new page.
 7. **Log** — append an `ingest` entry to `wiki/log.md` with `uv run wiki-pages log-append --op ingest --title "<title>" --bullet "..." --pages-touched "<page>, <page>"`. It renders the AGENTS.md format and spacing for you.
 8. **Pulse** — refresh `wiki/pulse.md`: rewrite the `## Working context` blurb to reflect what was just folded in, prepend the ingested source to `## Recently updated`, and trim the page back to ~500 words. The pulse is agent-maintained prose (like `overview.md`), not a deterministic CLI output; the MCP server serves it as `get_pulse()` so the next query reads it first.
-9. **Finalize** — mark the source ingested with `uv run wiki-plan --mark-ingested <tweet_id>` so the manifest records its page and hash. Run this after the page exists; do not edit the manifest by hand.
+9. **Finalize** — `uv run wiki-plan --mark-ingested <tweet_id>` after the page exists (see Worklist).
 
 Integrate into the existing wiki — prefer updating an existing page over creating a near-duplicate. Leave the wiki more connected than you found it.
 

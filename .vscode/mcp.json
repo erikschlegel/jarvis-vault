@@ -5,7 +5,7 @@
   // vault and build the search index; it also prints a portable `uv run
   // --directory <repo>` snippet for registering the server in another MCP client.
   "servers": {
-    "erik-wiki": {
+    "jarvis-vault": {
       "type": "stdio",
       "command": "uv",
       "args": ["run", "wiki-mcp"],

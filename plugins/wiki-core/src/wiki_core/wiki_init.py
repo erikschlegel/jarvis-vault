@@ -79,7 +79,7 @@ def mcp_snippet(vault: Path) -> str:
     """
     entry = {
         "servers": {
-            "erik-wiki": {
+            "jarvis-vault": {
                 "type": "stdio",
                 "command": "uv",
                 "args": ["run", "--directory", str(_repo_root()), "wiki-mcp"],

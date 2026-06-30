@@ -2,7 +2,7 @@
   "name": "wiki-core",
   "displayName": "LLM Wiki Core",
   "version": "0.1.0",
-  "description": "Core LLM Wiki engine and skills: ingest immutable sources into an interlinked Obsidian-vault wiki, query it through hybrid retrieval, and lint it for structural and semantic defects. Ships the deterministic Python engine (wiki-plan, wiki-pages, wiki-search, wiki-verify) and the erik-wiki MCP server (wiki-mcp).",
+  "description": "Core LLM Wiki engine and skills: ingest immutable sources into an interlinked Obsidian-vault wiki, query it through hybrid retrieval, and lint it for structural and semantic defects. Ships the deterministic Python engine (wiki-plan, wiki-pages, wiki-search, wiki-verify) and the jarvis-vault MCP server (wiki-mcp).",
   "publisher": "erikschlegel",
   "skills": "skills"
 }

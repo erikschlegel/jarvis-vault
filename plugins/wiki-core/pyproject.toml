@@ -1,7 +1,7 @@
 [project]
 name = "wiki-core"
 version = "0.1.0"
-description = "Deterministic LLM Wiki engine and MCP server for the erik-knowledge-base vault."
+description = "Deterministic LLM Wiki engine and MCP server for the jarvis-vault vault."
 requires-python = ">=3.12"
 dependencies = [
     "bm25s>=0.3.9",

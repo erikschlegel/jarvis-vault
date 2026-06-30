@@ -1,7 +1,7 @@
 [project]
 name = "wiki-connector-x"
 version = "0.1.0"
-description = "X (Twitter) source connector for the erik-knowledge-base LLM Wiki: fetch, import, and transcribe."
+description = "X (Twitter) source connector for the jarvis-vault LLM Wiki: fetch, import, and transcribe."
 requires-python = ">=3.12"
 dependencies = [
     "wiki-core",

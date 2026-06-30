@@ -14,8 +14,8 @@ environment variable always wins over the ``.env`` value.
 ``.env`` discovery is layered so it survives being installed away from the
 source repo: the current working directory and its parents are searched first
 (a consumer's project root), then this module's own directory tree (an editable
-checkout), then the user config directory (``$XDG_CONFIG_HOME/erik-wiki`` or
-``~/.config/erik-wiki``). The first ``.env`` found wins.
+checkout), then the user config directory (``$XDG_CONFIG_HOME/jarvis-vault`` or
+``~/.config/jarvis-vault``). The first ``.env`` found wins.
 
 Environment variables:
   WIKI_VAULT       Obsidian vault wiki root (the directory holding index.md).
@@ -40,14 +40,14 @@ def _user_config_dir() -> Path:
     """User configuration directory for the engine (XDG, with a HOME fallback)."""
     xdg = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
-    return base / "erik-wiki"
+    return base / "jarvis-vault"
 
 
 def _user_cache_dir() -> Path:
     """User cache directory for derived, rebuildable state (XDG, HOME fallback)."""
     xdg = os.environ.get("XDG_CACHE_HOME")
     base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
-    return base / "erik-wiki"
+    return base / "jarvis-vault"
 
 
 def _candidate_dotenv_paths() -> list[Path]:

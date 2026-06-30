@@ -105,7 +105,7 @@ def test_diagnose_reports_built_vault(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_mcp_snippet_embeds_vault(tmp_path: Path) -> None:
     snippet = wiki_init.mcp_snippet(tmp_path / "wiki")
     assert str(tmp_path / "wiki") in snippet
-    assert "erik-wiki" in snippet
+    assert "jarvis-vault" in snippet
     # The portable form is the repo-local `uv run --directory <repo>`, not the
     # unpublished `uvx --from wiki-core`.
     assert "uvx" not in snippet

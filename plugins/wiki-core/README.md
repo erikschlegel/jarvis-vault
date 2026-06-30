@@ -11,7 +11,7 @@ The agent loads the matching skill automatically based on your request.
 | Skill | Operation | What it does |
 |-------|-----------|--------------|
 | [wiki-ingest](skills/wiki-ingest/SKILL.md) | Ingest | Fold one `raw/` source into the wiki — summary, entities, concepts, overview, index, log — then rebuild the index |
-| [wiki-query](skills/wiki-query/SKILL.md) | Query | Answer questions against the wiki via the `erik-wiki` MCP retrieval tools, with citations |
+| [wiki-query](skills/wiki-query/SKILL.md) | Query | Answer questions against the wiki via the `jarvis-vault` MCP retrieval tools, with citations |
 | [wiki-lint](skills/wiki-lint/SKILL.md) | Lint | Health-check the wiki — broken links, orphans, contradictions, stale claims, gaps — and fix with approval |
 
 ### Console entry points
@@ -24,7 +24,7 @@ Run any from the repo root with `uv run <entry-point>`.
 | `wiki-pages` | Scaffold wiki pages, add index entries, append log entries |
 | `wiki-search` | Build the retrieval index, run hybrid search, find near-duplicates |
 | `wiki-verify` | Lint the wiki for structural and manifest defects |
-| `wiki-mcp` | Launch the `erik-wiki` MCP server (stdio) exposing the retrieval tools |
+| `wiki-mcp` | Launch the `jarvis-vault` MCP server (stdio) exposing the retrieval tools |
 
 In addition, two onboarding commands make a fresh checkout usable in one step:
 

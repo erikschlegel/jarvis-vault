@@ -1,5 +1,5 @@
 [project]
-name = "erik-knowledge-base"
+name = "jarvis-vault"
 version = "0.1.0"
 requires-python = ">=3.12"
 # The workspace root is virtual (see [tool.uv]); it depends on the plugin

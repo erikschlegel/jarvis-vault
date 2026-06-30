@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: "Process an immutable raw/ source into the erik-knowledge-base LLM Wiki — the Ingest operation. USE WHEN: the user drops a new source into raw/ and asks to ingest, process, fold in, or summarize it; asks to update the wiki from a source; or asks to compile pending sources into the vault. Covers the ingest worklist, the source→sources/→entities/→concepts/→overview/synthesis/index/log write order, and rebuilding the search index."
+description: "Process an immutable raw/ source into the jarvis-vault LLM Wiki — the Ingest operation. USE WHEN: the user drops a new source into raw/ and asks to ingest, process, fold in, or summarize it; asks to update the wiki from a source; or asks to compile pending sources into the vault. Covers the ingest worklist, the source→sources/→entities/→concepts/→overview/synthesis/index/log write order, and rebuilding the search index."
 user-invocable: true
 metadata:
   spec_version: "1.0"

@@ -1,6 +1,6 @@
 ---
 name: wiki-lint
-description: "Run a health check over the erik-knowledge-base LLM Wiki — the Lint operation. USE WHEN: the user asks for a wiki health check, lint, audit, or cleanup; asks to find broken links, orphan pages, contradictions, stale claims, or missing pages; or asks what is wrong with or missing from the vault. Covers the deterministic verify_wiki.py checks plus the semantic checks, fix-with-approval, and logging."
+description: "Run a health check over the jarvis-vault LLM Wiki — the Lint operation. USE WHEN: the user asks for a wiki health check, lint, audit, or cleanup; asks to find broken links, orphan pages, contradictions, stale claims, or missing pages; or asks what is wrong with or missing from the vault. Covers the deterministic verify_wiki.py checks plus the semantic checks, fix-with-approval, and logging."
 user-invocable: true
 metadata:
   spec_version: "1.0"
@@ -55,7 +55,7 @@ uv run wiki-search duplicates --threshold 0.93
 
 High-scoring pairs are often two sources covering the same talk, or an entity page that has drifted into restating its source. Lower the threshold to widen the net; treat every pair as a candidate to read, not an automatic merge.
 
-Use the `erik-wiki` MCP retrieval tools (see the **wiki-query** skill) to sample the vault efficiently when hunting for contradictions and gaps, rather than reading every page blind.
+Use the `jarvis-vault` MCP retrieval tools (see the **wiki-query** skill) to sample the vault efficiently when hunting for contradictions and gaps, rather than reading every page blind.
 
 ## Applying fixes
 

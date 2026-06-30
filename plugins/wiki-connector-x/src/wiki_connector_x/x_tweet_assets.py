@@ -14,7 +14,7 @@ from wiki_connector_x.x_source_io import slugify
 from wiki_core import paths
 
 RAW_ASSETS_X = paths.raw_root() / "assets" / "x"
-USER_AGENT = "erik-knowledge-base/1.0 (personal archive)"
+USER_AGENT = "jarvis-vault/1.0 (personal archive)"
 
 X_STATUS_RE = re.compile(
     r"^https?://(?:www\.)?(?:x\.com|twitter\.com)/[^/]+/status/\d+",

@@ -145,7 +145,7 @@ The wiki is markdown first; the engine is an accelerator, not a gate. Three tier
 
 - **Tier 0 — files (always available).** Every wiki page, including `pulse.md` and `index.md`, is markdown on disk under `WIKI_VAULT`. Read and write it with native file tools at the vault path. Ingest, Query, and Lint all work at this tier with no package install: read `pulse.md` then `index.md` to orient, open pages directly, and write pages back. This is the Karpathy baseline.
 - **Tier 1 — `wiki-search` CLI.** Installing `wiki-core` adds hybrid BM25 + dense retrieval (`uv run wiki-search`) plus the deterministic authoring helpers (`wiki-pages`, `wiki-plan`, `wiki-verify`) and onboarding (`wiki-init`, `wiki-doctor`). Use it when scanning `index.md` by hand is too slow to find the right pages, or to scaffold/roll-up pages mechanically.
-- **Tier 2 — `erik-wiki` MCP server.** `wiki-mcp` wraps the Tier 1 engine as MCP tools (`get_pulse`, `get_index`, `search_wiki`, `expand_neighbors`, `read_page`) for GUI and headless clients that prefer tool calls over a terminal. It reads the same files Tier 0 does, so anything it returns is also reachable by reading the vault directly.
+- **Tier 2 — `jarvis-vault` MCP server.** `wiki-mcp` wraps the Tier 1 engine as MCP tools (`get_pulse`, `get_index`, `search_wiki`, `expand_neighbors`, `read_page`) for GUI and headless clients that prefer tool calls over a terminal. It reads the same files Tier 0 does, so anything it returns is also reachable by reading the vault directly.
 
 `get_pulse()` / `get_index()` are conveniences over `pulse.md` / `index.md`; when the server is unavailable, read those files directly. The MCP tools fail soft — an unset `WIKI_VAULT` or unbuilt index returns an actionable message rather than crashing — so a missing Tier 2 never blocks Tier 0 work.
 
@@ -157,7 +157,7 @@ At larger scale, add local search (e.g. [qmd](https://github.com/tobi/qmd)) — 
 
 The deterministic engine ships as two installable packages under `plugins/`, a uv workspace:
 
-- `plugins/wiki-core/` — the wiki engine (`wiki_core` package) and its skills. Console entry points: `wiki-plan` (ingest worklist + manifest), `wiki-pages` (scaffold/index-add/log-append), `wiki-search` (build/search/duplicates), `wiki-verify` (lint), and `wiki-mcp` (the `erik-wiki` MCP server).
+- `plugins/wiki-core/` — the wiki engine (`wiki_core` package) and its skills. Console entry points: `wiki-plan` (ingest worklist + manifest), `wiki-pages` (scaffold/index-add/log-append), `wiki-search` (build/search/duplicates), `wiki-verify` (lint), and `wiki-mcp` (the `jarvis-vault` MCP server).
 - `plugins/wiki-connector-x/` — the X (Twitter) connector (`wiki_connector_x` package, depends on `wiki-core`) and its skills. Entry points: `x-fetch`, `x-import`, `x-refresh-streams`, `x-transcribe`.
 
 Run any of them with `uv run <entry-point>` from the repo root. Each plugin directory **is** its Python package, so the scripts ship with the plugin for consumers.

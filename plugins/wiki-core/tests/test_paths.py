@@ -48,7 +48,7 @@ def test_index_dir_falls_back_to_cache_when_unset(monkeypatch: pytest.MonkeyPatc
     monkeypatch.delenv("WIKI_VAULT", raising=False)
     monkeypatch.delenv("WIKI_INDEX_DIR", raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", "/tmp/xdg-cache")
-    assert paths.index_dir() == Path("/tmp/xdg-cache/erik-wiki/index")
+    assert paths.index_dir() == Path("/tmp/xdg-cache/jarvis-vault/index")
 
 
 def test_index_dir_uses_vault_when_set(monkeypatch: pytest.MonkeyPatch) -> None:

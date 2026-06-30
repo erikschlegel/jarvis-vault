@@ -23,7 +23,7 @@ from mcp.server.fastmcp import FastMCP
 
 from wiki_core import wiki_search
 
-mcp = FastMCP("erik-wiki")
+mcp = FastMCP("jarvis-vault")
 
 
 def _load() -> wiki_search.WikiIndex:

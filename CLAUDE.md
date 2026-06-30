@@ -1,4 +1,4 @@
-# erik-knowledge-base
+# jarvis-vault
 
 LLM Wiki knowledge base. The operating schema lives in [AGENTS.md](./AGENTS.md).
 

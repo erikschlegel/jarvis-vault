@@ -1,4 +1,4 @@
-# erik-knowledge-base
+# jarvis-vault
 
 Personal knowledge base using [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
@@ -31,7 +31,7 @@ You need [uv](https://docs.astral.sh/uv/) (the Python toolchain) and a folder to
    # then edit .env and set WIKI_VAULT=/absolute/path/to/your-vault/wiki
    ```
 
-   The `.env` is discovered automatically from the working directory upward, then this repo, then `~/.config/erik-wiki/.env`. A real exported environment variable always wins over the file.
+   The `.env` is discovered automatically from the working directory upward, then this repo, then `~/.config/jarvis-vault/.env`. A real exported environment variable always wins over the file.
 
 3. **Seed the vault and build the index.** One command seeds an empty vault from the shipped template, builds the search index, and prints an MCP server entry:
 
@@ -47,7 +47,7 @@ You need [uv](https://docs.astral.sh/uv/) (the Python toolchain) and a folder to
    uv run wiki-doctor
    ```
 
-5. **Wire up the MCP retrieval server.** This repo already ships [.vscode/mcp.json](.vscode/mcp.json), so VS Code picks up the `erik-wiki` server (`uv run wiki-mcp`) automatically — it reads `WIKI_VAULT` from your `.env`, no prompt. For another client, paste the snippet `wiki-init` printed (the portable `uv run --directory <repo>` form) into that client's MCP config.
+5. **Wire up the MCP retrieval server.** This repo already ships [.vscode/mcp.json](.vscode/mcp.json), so VS Code picks up the `jarvis-vault` server (`uv run wiki-mcp`) automatically — it reads `WIKI_VAULT` from your `.env`, no prompt. For another client, paste the snippet `wiki-init` printed (the portable `uv run --directory <repo>` form) into that client's MCP config.
 
 The engine is files-first and degrades gracefully: even without the MCP server, every wiki page is plain markdown you can read and edit directly, and the `wiki-search` CLI covers retrieval. See the access tiers in [AGENTS.md](AGENTS.md) for the full files → CLI → MCP progression.
 
@@ -70,7 +70,7 @@ The engine and its skills ship as two plugins under [plugins/](plugins/), a uv w
 | [x-import](plugins/wiki-connector-x/skills/x-import/SKILL.md) | wiki-connector-x | Pre-ingest | Clip X likes and bookmarks into `raw/` (API, account archive, bookmarks JSON, or Web Clipper folder) |
 | [x-transcribe](plugins/wiki-connector-x/skills/x-transcribe/SKILL.md) | wiki-connector-x | Pre-ingest | Backfill local ASR transcripts for caption-less X videos so their spoken content is ingestible |
 | [wiki-ingest](plugins/wiki-core/skills/wiki-ingest/SKILL.md) | wiki-core | Ingest | Fold one `raw/` source into the wiki — summary, entities, concepts, overview, index, log — then rebuild the index |
-| [wiki-query](plugins/wiki-core/skills/wiki-query/SKILL.md) | wiki-core | Query | Answer questions against the wiki via the `erik-wiki` MCP retrieval tools, with citations |
+| [wiki-query](plugins/wiki-core/skills/wiki-query/SKILL.md) | wiki-core | Query | Answer questions against the wiki via the `jarvis-vault` MCP retrieval tools, with citations |
 | [wiki-lint](plugins/wiki-core/skills/wiki-lint/SKILL.md) | wiki-core | Lint | Health-check the wiki — broken links, orphans, contradictions, stale claims, gaps — and fix with approval |
 
 Typical chain: **x-import** → **x-transcribe** → **wiki-ingest** → **wiki-query**, with **wiki-lint** run periodically.

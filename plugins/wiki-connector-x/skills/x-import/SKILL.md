@@ -1,6 +1,6 @@
 ---
 name: x-import
-description: "Import X (Twitter) likes and bookmarks into raw/ as immutable source markdown for the erik-knowledge-base LLM Wiki — the pre-ingest pipeline. USE WHEN: the user wants to clip, import, fetch, or sync X likes or bookmarks into the vault; points at an X data archive, a bookmarks JSON export, or a folder of Web Clipper markdown; or asks to pull tweets in for ingest. Covers the four import paths, the videos[] frontmatter contract, and hand-off to wiki-ingest."
+description: "Import X (Twitter) likes and bookmarks into raw/ as immutable source markdown for the jarvis-vault LLM Wiki — the pre-ingest pipeline. USE WHEN: the user wants to clip, import, fetch, or sync X likes or bookmarks into the vault; points at an X data archive, a bookmarks JSON export, or a folder of Web Clipper markdown; or asks to pull tweets in for ingest. Covers the four import paths, the videos[] frontmatter contract, and hand-off to wiki-ingest."
 user-invocable: true
 metadata:
   spec_version: "1.0"

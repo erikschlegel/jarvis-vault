@@ -1,6 +1,6 @@
 ---
 name: wiki-query
-description: "Answer questions against the erik-knowledge-base LLM Wiki using the erik-wiki MCP retrieval tools. USE WHEN: the user asks a question that the wiki may answer, asks to compare or synthesize across sources, or asks what the vault says about a topic, person, concept, or claim. Covers routing across get_index / search_wiki / expand_neighbors / read_page, citation discipline, and filing durable answers back into the vault."
+description: "Answer questions against the jarvis-vault LLM Wiki using the jarvis-vault MCP retrieval tools. USE WHEN: the user asks a question that the wiki may answer, asks to compare or synthesize across sources, or asks what the vault says about a topic, person, concept, or claim. Covers routing across get_index / search_wiki / expand_neighbors / read_page, citation discipline, and filing durable answers back into the vault."
 user-invocable: true
 metadata:
   spec_version: "1.0"
@@ -11,13 +11,13 @@ metadata:
 
 ## Overview
 
-This skill runs the **Query** operation defined in [AGENTS.md](../../../../AGENTS.md) against the LLM Wiki. The wiki is an interlinked markdown knowledge base living in an Obsidian vault outside the workspace (its location resolves from `WIKI_VAULT`). It is plain files: you can always read and write any page with native file tools at the vault path (Tier 0). The `erik-wiki` MCP server (Tier 2) is a retrieval *accelerator* over those same files — prefer it for **search** (finding which pages answer a question), but reading a page you already know the path of, or writing a page back, works directly through file tools. See the AGENTS.md "Access tiers" section.
+This skill runs the **Query** operation defined in [AGENTS.md](../../../../AGENTS.md) against the LLM Wiki. The wiki is an interlinked markdown knowledge base living in an Obsidian vault outside the workspace (its location resolves from `WIKI_VAULT`). It is plain files: you can always read and write any page with native file tools at the vault path (Tier 0). The `jarvis-vault` MCP server (Tier 2) is a retrieval *accelerator* over those same files — prefer it for **search** (finding which pages answer a question), but reading a page you already know the path of, or writing a page back, works directly through file tools. See the AGENTS.md "Access tiers" section.
 
 The retrieval engine is hybrid: BM25 keyword search and on-device dense embeddings, fused with reciprocal-rank fusion, over heading-level chunks of every page. Trust it over recall: the index reflects the vault's current state, your memory of prior sessions does not.
 
 ## Tools
 
-The `erik-wiki` MCP server exposes five tools:
+The `jarvis-vault` MCP server exposes five tools:
 
 - `get_pulse()` — returns `pulse.md`, the recent-context cache: a short rolling prose summary of recent activity and the current working context. Tier 0 routing: read this **first**, before `get_index()`, so the session resumes without a recap. Returns a placeholder when the vault has no pulse yet.
 - `get_index()` — returns `index.md`, the curated content catalog. Read this second for broad or structural questions ("what does the vault cover?", "which sources discuss X?").
@@ -25,7 +25,7 @@ The `erik-wiki` MCP server exposes five tools:
 - `expand_neighbors(path, depth)` — 1st-degree wikilink neighbors of a page. Use to pull in connected context after a hit lands on a relevant page.
 - `read_page(path)` — full markdown of one page. Use to read a result in full before quoting or synthesizing.
 
-If the `erik-wiki` server is not configured in this client, fall back to Tier 0: read `pulse.md` and `index.md` directly with file tools at the `WIKI_VAULT` path, open pages by their catalog paths, and use `uv run wiki-search` (Tier 1) for keyword/dense search. The tools above degrade gracefully — an unset `WIKI_VAULT` or unbuilt index returns a guidance message (run `uv run wiki-init`) rather than failing the session.
+If the `jarvis-vault` server is not configured in this client, fall back to Tier 0: read `pulse.md` and `index.md` directly with file tools at the `WIKI_VAULT` path, open pages by their catalog paths, and use `uv run wiki-search` (Tier 1) for keyword/dense search. The tools above degrade gracefully — an unset `WIKI_VAULT` or unbuilt index returns a guidance message (run `uv run wiki-init`) rather than failing the session.
 
 ## Routing
 

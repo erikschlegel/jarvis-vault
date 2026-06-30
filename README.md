@@ -53,6 +53,18 @@ The engine is files-first and degrades gracefully: even without the MCP server, 
 
 For the X (Twitter) connector — API credentials, fetching likes and bookmarks, local video transcription — continue with the [wiki-connector-x setup](plugins/wiki-connector-x/README.md#setup).
 
+## Install as a Copilot plugin
+
+The skills also ship as installable GitHub Copilot plugins, declared in [.github/plugin/marketplace.json](.github/plugin/marketplace.json). Add this repo as a local marketplace, then install the plugins you want:
+
+```text
+/plugin marketplace add erikschlegel/jarvis-vault
+/plugin install wiki-core@jarvis-vault
+/plugin install wiki-connector-x@jarvis-vault
+```
+
+`wiki-core` is the engine and its ingest/query/lint skills; `wiki-connector-x` adds the X (Twitter) pre-ingest skills and depends on `wiki-core`. Installing the plugins gives you the skills; the deterministic engine still resolves your vault from `WIKI_VAULT`, so complete the [Setup](#setup) steps above regardless of how you install.
+
 ## Workflow
 
 1. Drop a source into `raw/` (Obsidian Web Clipper works well).

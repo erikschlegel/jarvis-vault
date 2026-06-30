@@ -1,0 +1,26 @@
+{
+  "name": "jarvis-vault",
+  "owner": {
+    "name": "erikschlegel"
+  },
+  "metadata": {
+    "description": "Local marketplace for the LLM Wiki plugins: the wiki-core engine and the X (Twitter) connector.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "wiki-core",
+      "source": "./plugins/wiki-core",
+      "description": "Core LLM Wiki engine and skills: ingest immutable sources into an interlinked Obsidian-vault wiki, query it through hybrid retrieval, and lint it for structural and semantic defects.",
+      "version": "0.1.0",
+      "strict": false
+    },
+    {
+      "name": "wiki-connector-x",
+      "source": "./plugins/wiki-connector-x",
+      "description": "X (Twitter) connector for the LLM Wiki: import likes and bookmarks into raw/ as immutable source markdown and backfill local transcripts for caption-less videos. Depends on wiki-core.",
+      "version": "0.1.0",
+      "strict": false
+    }
+  ]
+}

@@ -309,7 +309,8 @@ run_wiki_init() {
   if [[ "${BUILD_INDEX}" != true ]]; then
     init_args+=("--no-build")
   fi
-  uv_run wiki-init "${init_args[@]}"
+  # Guard the empty-array expansion for Bash 3.2 (macOS default) under `set -u`.
+  uv_run wiki-init ${init_args[@]+"${init_args[@]}"}
   relocate_obsidian_config
 }
 

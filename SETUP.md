@@ -28,7 +28,7 @@ The script is idempotent and safe to re-run. It detects what is already in place
 3. Runs `uv sync` to install the engine and its console scripts.
 4. Prompts for where the vault should live (default `~/obsidian/jarvis-vault`), creates `wiki/` and `raw/` siblings, and writes `WIKI_VAULT` to `.env`.
 5. Seeds the vault from the shipped template and builds the search index (`wiki-init`).
-6. Registers the `jarvis-vault` MCP server with VS Code and, when present, the GitHub Copilot CLI.
+6. Registers the `jarvis-vault` MCP server with VS Code; with the GitHub Copilot CLI when it is installed, or by writing `~/.copilot/mcp-config.json` directly when it is not.
 7. Verifies the result with `wiki-doctor`.
 
 Useful flags:
@@ -138,7 +138,7 @@ From a local clone, point the marketplace command at the checkout instead: `copi
 copilot plugin install erikschlegel/jarvis-vault:plugins/wiki-core
 ```
 
-The interactive-session equivalents are `/plugin marketplace add` and `/plugin install`. You can also install declaratively by adding the plugin names to the `enabledPlugins` array in `~/.copilot/settings.json` (all projects) or `.github/copilot/settings.json` (this repo).
+The interactive-session equivalents are `/plugin marketplace add` and `/plugin install`. You can also enable plugins declaratively through the `enabledPlugins` map (a `{ "spec": true }` object, not an array) in `~/.copilot/settings.json` (all projects) or `.github/copilot/settings.json` (this repo). When the `copilot` binary is absent, `bin/setup.sh` does this for you: it writes local-path specs (`<repo>/plugins/wiki-core` and `<repo>/plugins/wiki-connector-x`) into `enabledPlugins`, so a desktop-only user gets the skills wired without the CLI. Restart the Copilot desktop app afterward to load them.
 
 The plugin delivers only the skills. The engine still resolves your vault from `WIKI_VAULT`, so run `bin/setup.sh` or the manual steps above, then verify with `uv run wiki-doctor`.
 

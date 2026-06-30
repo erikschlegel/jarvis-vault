@@ -21,13 +21,20 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from wiki_core import paths, wiki_search
+from wiki_core import console_scripts, paths, wiki_search
 
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
+
+# Minimum interpreter the engine supports (matches every plugin's requires-python).
+MIN_PYTHON: tuple[int, int] = (3, 12)
+
+# Server name registered in every MCP client config.
+MCP_SERVER_NAME = "jarvis-vault"
 
 
 @dataclass
@@ -69,6 +76,23 @@ def seed_vault(vault: Path, template: Path, *, force: bool = False) -> list[str]
     return created
 
 
+def ensure_raw_root() -> list[str]:
+    """Create the immutable ``raw/`` source tree beside the wiki; return new dirs.
+
+    Idempotent: only directories that did not already exist are created and
+    reported. ``raw/`` is the sibling the agent reads from, with ``assets`` for
+    attachments and ``x`` for X (Twitter) sources.
+    """
+    root = paths.raw_root()
+    created: list[str] = []
+    for rel in ("", "assets", "x"):
+        target = root / rel if rel else root
+        if not target.exists():
+            created.append((Path("raw") / rel).as_posix() if rel else "raw")
+        target.mkdir(parents=True, exist_ok=True)
+    return created
+
+
 def mcp_snippet(vault: Path) -> str:
     """Render an mcp.json server entry wired to ``vault`` via an env var.
 
@@ -79,7 +103,7 @@ def mcp_snippet(vault: Path) -> str:
     """
     entry = {
         "servers": {
-            "jarvis-vault": {
+            MCP_SERVER_NAME: {
                 "type": "stdio",
                 "command": "uv",
                 "args": ["run", "--directory", str(_repo_root()), "wiki-mcp"],
@@ -90,9 +114,96 @@ def mcp_snippet(vault: Path) -> str:
     return json.dumps(entry, indent=2)
 
 
+def copilot_mcp_snippet(vault: Path) -> str:
+    """Render the GitHub Copilot CLI registration for the retrieval server.
+
+    Returns the one-shot ``copilot mcp add`` command followed by the equivalent
+    ``~/.copilot/mcp-config.json`` block, so a client that auto-starts MCP
+    servers from that file picks up ``jarvis-vault`` the same way VS Code does.
+    Both forms pin uv to this workspace with ``--directory``; the command relies
+    on the layered ``.env`` for ``WIKI_VAULT`` while the JSON block embeds it so
+    the entry resolves from any working directory.
+    """
+    repo = str(_repo_root())
+    command = f"copilot mcp add {MCP_SERVER_NAME} -- uv run --directory {repo} wiki-mcp"
+    config = {
+        "mcpServers": {
+            MCP_SERVER_NAME: {
+                "type": "local",
+                "command": "uv",
+                "args": ["run", "--directory", repo, "wiki-mcp"],
+                "env": {"WIKI_VAULT": str(vault)},
+                "tools": ["*"],
+            }
+        }
+    }
+    return f"{command}\n\n~/.copilot/mcp-config.json:\n{json.dumps(config, indent=2)}"
+
+
+def _file_mentions_server(path: Path, name: str) -> bool:
+    """Best-effort, fail-soft check that ``path`` registers MCP server ``name``.
+
+    Matches the quoted server key as plain text so JSONC client configs (which
+    ``json`` cannot parse) are still detected, and a missing or unreadable file
+    is simply absent rather than an error.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return f'"{name}"' in text
+
+
+def mcp_registrations() -> list[str]:
+    """Return the MCP clients where ``jarvis-vault`` is registered (best-effort)."""
+    found: list[str] = []
+    if _file_mentions_server(_repo_root() / ".vscode" / "mcp.json", MCP_SERVER_NAME):
+        found.append("VS Code (.vscode/mcp.json)")
+    if _file_mentions_server(Path.home() / ".copilot" / "mcp-config.json", MCP_SERVER_NAME):
+        found.append("Copilot CLI (~/.copilot/mcp-config.json)")
+    return found
+
+
+def _python_check() -> Diagnostic:
+    """Verify the running interpreter meets the minimum supported version."""
+    current = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    ok = sys.version_info[:2] >= MIN_PYTHON
+    minimum = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
+    detail = current if ok else f"{current} (need >= {minimum}; run `uv python install {minimum}`)"
+    return Diagnostic("python", ok, detail)
+
+
+def _scripts_check() -> Diagnostic:
+    """Verify every required console script is registered."""
+    missing = console_scripts.missing_scripts()
+    if missing:
+        return Diagnostic(
+            "console scripts",
+            False,
+            "missing: " + ", ".join(missing) + " (run `uv sync`)",
+        )
+    return Diagnostic(
+        "console scripts",
+        True,
+        f"{len(console_scripts.REQUIRED_SCRIPTS)} registered",
+    )
+
+
+def _mcp_check() -> Diagnostic:
+    """Report which MCP clients have the retrieval server registered."""
+    clients = mcp_registrations()
+    if clients:
+        return Diagnostic("mcp registration", True, "; ".join(clients))
+    return Diagnostic(
+        "mcp registration",
+        False,
+        "not registered (run `bash bin/setup.sh` or see SETUP.md)",
+    )
+
+
 def diagnose() -> list[Diagnostic]:
     """Run the read-only onboarding checks and return them in report order."""
-    checks: list[Diagnostic] = []
+    checks: list[Diagnostic] = [_python_check()]
     vault = paths.find_vault()
     if vault is None:
         checks.append(
@@ -102,35 +213,37 @@ def diagnose() -> list[Diagnostic]:
                 "not set -- export it or add it to .env (copy .env.example)",
             )
         )
-        return checks
-    checks.append(Diagnostic("WIKI_VAULT", True, str(vault)))
-    checks.append(
-        Diagnostic(
-            "vault directory",
-            vault.is_dir(),
-            "present" if vault.is_dir() else f"missing: {vault} (run `uv run wiki-init`)",
+    else:
+        checks.append(Diagnostic("WIKI_VAULT", True, str(vault)))
+        checks.append(
+            Diagnostic(
+                "vault directory",
+                vault.is_dir(),
+                "present" if vault.is_dir() else f"missing: {vault} (run `uv run wiki-init`)",
+            )
         )
-    )
-    index_md = vault / "index.md"
-    checks.append(
-        Diagnostic(
-            "index.md",
-            index_md.is_file(),
-            "present"
-            if index_md.is_file()
-            else "missing: run `uv run wiki-init` to seed the vault",
+        index_md = vault / "index.md"
+        checks.append(
+            Diagnostic(
+                "index.md",
+                index_md.is_file(),
+                "present"
+                if index_md.is_file()
+                else "missing: run `uv run wiki-init` to seed the vault",
+            )
         )
-    )
-    meta = paths.index_dir() / "meta.json"
-    checks.append(
-        Diagnostic(
-            "search index",
-            meta.is_file(),
-            str(meta.parent)
-            if meta.is_file()
-            else "not built: run `uv run wiki-init` or `uv run wiki-search build`",
+        meta = paths.index_dir() / "meta.json"
+        checks.append(
+            Diagnostic(
+                "search index",
+                meta.is_file(),
+                str(meta.parent)
+                if meta.is_file()
+                else "not built: run `uv run wiki-init` or `uv run wiki-search build`",
+            )
         )
-    )
+    checks.append(_scripts_check())
+    checks.append(_mcp_check())
     return checks
 
 
@@ -148,6 +261,12 @@ def run_init(*, force: bool, build: bool) -> int:
     else:
         print(f"Vault already populated at {vault} (nothing to seed).")
 
+    raw_created = ensure_raw_root()
+    if raw_created:
+        print(f"\nCreated raw source folders under {paths.raw_root()}:")
+        for rel in raw_created:
+            print(f"  + {rel}")
+
     if build:
         print("\nBuilding search index...")
         report = wiki_search.build_index(vault, incremental=True)
@@ -155,8 +274,10 @@ def run_init(*, force: bool, build: bool) -> int:
     else:
         print("\nSkipped index build (--no-build). Run `uv run wiki-search build` later.")
 
-    print("\nmcp.json server entry:")
+    print("\nVS Code -- .vscode/mcp.json server entry:")
     print(mcp_snippet(vault))
+    print("\nGitHub Copilot CLI -- register the retrieval server:")
+    print(copilot_mcp_snippet(vault))
     return EXIT_SUCCESS
 
 

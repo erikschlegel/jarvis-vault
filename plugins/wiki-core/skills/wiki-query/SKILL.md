@@ -48,7 +48,7 @@ Issue multiple `search_wiki` calls with different phrasings when the first pass 
 
 Per the AGENTS.md Query operation, valuable analysis must not die in chat. When you produce a durable artifact — a comparison, a cross-source synthesis, or a non-trivial answer worth keeping — file it back into the vault:
 
-1. Write a new page under the appropriate category, usually `wiki/comparisons/` (lowercase kebab-case filename, relative markdown links, aggressive cross-linking).
+1. Write a new page under the appropriate category, usually `wiki/comparisons/` (lowercase kebab-case filename, relative markdown links, aggressive cross-linking). Give it OKF frontmatter — `type: comparison`, a crafted `title`, and an optional `tags` list.
 2. Catalog the new page in `wiki/index.md` with `uv run wiki-pages index-add --section "<heading>" --entry "[Title](comparisons/<slug>.md) — one-line summary."` — it inserts the bullet under the named section and dedupes on the link target, so no anchor matching and re-runs are no-ops.
 3. Append a `query` entry to `wiki/log.md` with `uv run wiki-pages log-append --op query --title "<title>" --bullet "..." --pages-touched "comparisons/<slug>.md"` — it renders the AGENTS.md log format for you.
 4. After writing vault files, rebuild the index so future searches see the new page: `uv run wiki-search build --incremental`.

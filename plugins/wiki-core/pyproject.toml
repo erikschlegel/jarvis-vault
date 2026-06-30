@@ -18,6 +18,8 @@ wiki-plan = "wiki_core.ingest_plan:main"
 wiki-mcp = "wiki_core.mcp_server:main"
 wiki-init = "wiki_core.wiki_init:main"
 wiki-doctor = "wiki_core.wiki_init:doctor_main"
+lint-docs = "wiki_core.lint_docs:main"
+scan-secrets = "wiki_core.scan_secrets:main"  # pragma: allowlist secret
 
 [build-system]
 requires = ["hatchling"]

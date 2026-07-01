@@ -63,7 +63,7 @@ def test_render_inbox_md_shape() -> None:
     assert md.startswith("---\n")
     assert "source_type: doc" in md
     assert 'source_id: "abc123"' in md
-    assert "resource: file:///x.md" in md
+    assert 'resource: "file:///x.md"' in md
     assert 'title: "A Title"' in md
     assert "imported_at: 2026-07-01" in md
     assert md.rstrip().endswith("Body text.")
@@ -94,7 +94,7 @@ def test_add_source_url_monkeypatched(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
     text = dest.read_text(encoding="utf-8")
     assert "source_type: web" in text
-    assert "resource: https://example.com/post" in text
+    assert 'resource: "https://example.com/post"' in text
     assert 'title: "Fetched Title"' in text
     assert "Page body." in text
 

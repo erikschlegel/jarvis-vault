@@ -116,7 +116,9 @@ def build_scaffold(record: dict[str, Any], raw_text: str, *, ingested_date: str)
         f"source_type: {source_type}",
         f'source_id: "{source_id}"',
         f"domain: {record['domain']}",
-        f"resource: {url}",
+        # ``resource`` is a required OKF key that wiki-verify rejects when empty;
+        # fall back to the raw file path when the adapter has no canonical URL.
+        f"resource: {url or record['file']}",
         f"raw: {record['file']}",
         f"timestamp: {ingested_date}",
         "tags: []",

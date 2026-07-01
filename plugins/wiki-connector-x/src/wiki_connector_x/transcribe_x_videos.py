@@ -133,9 +133,15 @@ def probe_has_audio(path: Path) -> bool:
         return False
 
 
-def patch_source(src: Path, idx: int, stream: str, transcript_rel: str) -> None:
-    """Insert transcript: into the frontmatter video entry + Attachments line."""
-    lines = src.read_text(encoding="utf-8").splitlines()
+def _apply_transcript_patch(text: str, stream: str, transcript_rel: str) -> str:
+    """Return ``text`` with the transcript entries inserted (idempotent, pure).
+
+    Adds a frontmatter ``transcript:`` line after the matching ``stream:`` entry
+    and a ``- Video transcript:`` bullet after the matching Attachments stream
+    bullet, unless each already follows its anchor. No I/O, so callers can diff
+    the result against the original to decide whether a write is needed.
+    """
+    lines = text.splitlines()
     out: list[str] = []
     for i, line in enumerate(lines):
         out.append(line)
@@ -150,7 +156,15 @@ def patch_source(src: Path, idx: int, stream: str, transcript_rel: str) -> None:
             nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
             if not nxt.startswith("- Video transcript:"):
                 out.append(f"- Video transcript: `{transcript_rel}`")
-    src.write_text("\n".join(out) + "\n", encoding="utf-8")
+    return "\n".join(out) + "\n"
+
+
+def patch_source(src: Path, idx: int, stream: str, transcript_rel: str) -> None:
+    """Insert transcript: into the frontmatter video entry + Attachments line."""
+    src.write_text(
+        _apply_transcript_patch(src.read_text(encoding="utf-8"), stream, transcript_rel),
+        encoding="utf-8",
+    )
 
 
 def reconcile_frontmatter(src: Path, idx: int, stream: str, transcript_rel: str) -> bool:
@@ -162,10 +176,17 @@ def reconcile_frontmatter(src: Path, idx: int, stream: str, transcript_rel: str)
     persists), stranding the source in the worklist forever. Calling this on the
     file-exists path re-patches the frontmatter (idempotently) so the source drops
     out of the worklist. Returns True if a change was written.
+
+    Short-circuits without touching the file when both the frontmatter
+    ``transcript:`` line and the Attachments bullet are already present, so a
+    no-op reconcile does not churn the source's mtime.
     """
     before = src.read_text(encoding="utf-8")
-    patch_source(src, idx, stream, transcript_rel)
-    return src.read_text(encoding="utf-8") != before
+    after = _apply_transcript_patch(before, stream, transcript_rel)
+    if after == before:
+        return False
+    src.write_text(after, encoding="utf-8")
+    return True
 
 
 def main() -> int:

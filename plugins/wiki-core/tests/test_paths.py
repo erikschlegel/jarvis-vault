@@ -63,12 +63,15 @@ def test_index_dir_explicit_override_wins(monkeypatch: pytest.MonkeyPatch) -> No
     assert paths.index_dir() == Path("/custom/index")
 
 
-def test_raw_root_falls_back_to_cache_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_raw_root_falls_back_to_cache_when_unset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cache = tmp_path / "xdg-cache"
     monkeypatch.delenv("WIKI_VAULT", raising=False)
     monkeypatch.delenv("WIKI_RAW", raising=False)
-    monkeypatch.setenv("XDG_CACHE_HOME", "/tmp/xdg-cache")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(cache))
     # Non-raising: keeps module-level constants (RAW_X, RAW_ASSETS_X) importable.
-    assert paths.raw_root() == Path("/tmp/xdg-cache/jarvis-vault/raw")
+    assert paths.raw_root() == cache / "jarvis-vault" / "raw"
 
 
 def test_raw_root_uses_vault_sibling_when_set(monkeypatch: pytest.MonkeyPatch) -> None:

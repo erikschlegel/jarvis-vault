@@ -21,10 +21,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
+import json
 import logging
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -72,8 +74,13 @@ def fetch_url(url: str) -> tuple[str, str]:
     """Fetch ``url`` and return ``(title, body_text)``.
 
     Raises ``urllib.error.URLError`` on a network/HTTP failure so the caller can
-    report a clean message and exit non-zero.
+    report a clean message and exit non-zero. Rejects any non-``http(s)`` scheme
+    (e.g. ``file:``) before opening so a crafted argument cannot reach the local
+    filesystem or an unexpected protocol handler.
     """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"Refusing to fetch non-http(s) URL scheme: {scheme or '(none)'}")
     request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})  # noqa: S310
     with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
         charset = response.headers.get_content_charset() or "utf-8"
@@ -106,13 +113,19 @@ def render_inbox_md(
     imported_at: str,
     body: str,
 ) -> str:
-    """Render the ``raw/inbox`` markdown carrying uniform identity frontmatter."""
+    """Render the ``raw/inbox`` markdown carrying uniform identity frontmatter.
+
+    Free-text values (``source_id``, ``resource``, ``title``) are emitted as
+    JSON-encoded scalars — a valid subset of YAML double-quoted scalars — so a
+    URL containing ``#`` or a title containing a quote or backslash cannot break
+    the frontmatter block.
+    """
     fm = [
         "---",
         f"source_type: {source_type}",
-        f'source_id: "{source_id}"',
-        f"resource: {resource}",
-        f'title: "{title}"',
+        f"source_id: {json.dumps(source_id)}",
+        f"resource: {json.dumps(resource)}",
+        f"title: {json.dumps(title)}",
         f"imported_at: {imported_at}",
         "---",
     ]

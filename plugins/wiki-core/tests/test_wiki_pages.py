@@ -73,6 +73,8 @@ def test_build_scaffold_without_resource_omits_link() -> None:
 
     assert "**Source:** Some One\n" in page
     assert "**Source:** [Some One]" not in page
+    # wiki-verify rejects an empty required `resource`; it falls back to the raw path.
+    assert "resource: raw/inbox/nourl0.md" in page
 
 
 # --------------------------------------------------------------------------- #

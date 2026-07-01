@@ -2,7 +2,7 @@
 """Hybrid BM25 + dense retrieval engine over the LLM Wiki vault.
 
 Builds a derived, rebuildable index (BM25 keyword + bge-small embeddings) over
-the iCloud Obsidian wiki and answers queries with reciprocal-rank fusion plus
+the synced Obsidian wiki and answers queries with reciprocal-rank fusion plus
 1st-degree wikilink graph expansion. Local-only: embeddings run on-device via
 fastembed (ONNX); no network at query time once the model is cached.
 

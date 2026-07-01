@@ -3,7 +3,7 @@
 Engine tests are hermetic: they build a throwaway index over a fixture vault in
 ``tmp_path`` and redirect every index-artifact path off the real
 ``scripts/.wiki_index/`` so a test run never touches the developer's live index
-or the iCloud vault. Embeddings use the locally cached fastembed model, so no
+or the synced vault. Embeddings use the locally cached fastembed model, so no
 network access is required once the model has been downloaded.
 """
 

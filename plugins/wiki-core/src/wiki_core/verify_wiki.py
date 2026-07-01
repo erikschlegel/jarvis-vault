@@ -9,7 +9,7 @@ Read-only. Walks the vault wiki tree, parses inline markdown links, and reports:
 Usage:
     python3 scripts/verify_wiki.py [--vault PATH] [--manifest PATH]
 
-Defaults point at the live iCloud Obsidian vault and the repo manifest.
+Defaults point at the live synced Obsidian vault and the repo manifest.
 """
 
 from __future__ import annotations

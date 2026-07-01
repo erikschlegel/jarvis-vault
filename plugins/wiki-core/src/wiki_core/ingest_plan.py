@@ -276,7 +276,7 @@ def iter_canonical_source_files() -> list[Path]:
 def vault_page_exists(domain: str, slug: str, config: dict[str, Any]) -> bool:
     """Self-heal check: does the source's wiki page exist in its vault?
 
-    Returns False on transient OS errors (the iCloud-backed vault can briefly
+    Returns False on transient OS errors (a synced vault can briefly
     fail a stat) so a hiccup never crashes the whole plan; the page is simply
     treated as missing and re-queued.
     """

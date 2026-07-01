@@ -3,7 +3,7 @@
 Parsing helpers are pure and need no index. Index-level tests build a throwaway
 index over the fixture vault (see ``conftest.py``) and assert ranking sanity,
 graph expansion, safe page reads, and build determinism without touching the
-real index or the iCloud vault.
+real index or the synced vault.
 """
 
 from __future__ import annotations

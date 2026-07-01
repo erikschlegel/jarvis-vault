@@ -41,10 +41,10 @@ EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 EXIT_ERROR = 2
 
-RAW_X = paths.raw_root() / "x"
-# Config and manifest resolve from WIKI_CONFIG / WIKI_STATE (see paths).
-DEFAULT_CONFIG = paths.config_path()
-DEFAULT_STATE = paths.state_path()
+# These paths anchor on the vault (WIKI_VAULT), so they are resolved lazily at
+# call time rather than import time: raw_root() intentionally raises SystemExit
+# with setup guidance when WIKI_VAULT is unset, and evaluating that at module
+# import would break simply importing the module (e.g. during test collection).
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
 STATUS_ID_RE = re.compile(r"/status/(\d+)")
@@ -240,7 +240,8 @@ def domain_vault(domain: str, config: dict[str, Any]) -> Path | None:
 # --------------------------------------------------------------------------- #
 def iter_source_files() -> list[Path]:
     """All raw X source markdown files, sorted for deterministic output."""
-    return sorted(p for p in RAW_X.rglob("*.md") if p.name != "README.md")
+    raw_x = paths.raw_root() / "x"
+    return sorted(p for p in raw_x.rglob("*.md") if p.name != "README.md")
 
 
 def _canonical_rank(path: Path, tweet_id: str) -> tuple[int, str]:
@@ -275,7 +276,7 @@ def iter_canonical_source_files() -> list[Path]:
 def vault_page_exists(domain: str, slug: str, config: dict[str, Any]) -> bool:
     """Self-heal check: does the source's wiki page exist in its vault?
 
-    Returns False on transient OS errors (the iCloud-backed vault can briefly
+    Returns False on transient OS errors (a synced vault can briefly
     fail a stat) so a hiccup never crashes the whole plan; the page is simply
     treated as missing and re-queued.
     """
@@ -471,8 +472,8 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
+    parser.add_argument("--config", type=Path, default=paths.config_path())
+    parser.add_argument("--state", type=Path, default=paths.state_path())
     parser.add_argument("--out", type=Path, help="Write the worklist JSON to this file.")
     parser.add_argument("--domain", help="Restrict the plan to a single domain.")
     parser.add_argument("--all-domains", action="store_true", help="Include disabled domains.")

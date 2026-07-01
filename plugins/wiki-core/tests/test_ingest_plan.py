@@ -1,7 +1,7 @@
 """Hermetic tests for the ingest manifest-mutation helpers.
 
 These exercise ``mark_ingested`` against a hand-built plan and an in-memory
-manifest, monkeypatching ``vault_page_exists`` so no raw sources or iCloud vault
+manifest, monkeypatching ``vault_page_exists`` so no raw sources or synced vault
 are touched. They lock the finalize contract the agent relies on after writing
 source pages.
 """

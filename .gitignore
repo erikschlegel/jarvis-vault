@@ -19,3 +19,6 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 *.egg-info/
+
+# VS Code workspace settings (local agent/tooling config)
+.vscode/settings.json

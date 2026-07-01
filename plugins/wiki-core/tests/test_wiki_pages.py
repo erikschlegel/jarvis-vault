@@ -2,7 +2,7 @@
 
 These exercise the pure builders and the file-mutating helpers against a
 ``tmp_path`` vault, pointing ``WIKI_RAW`` at a tmp raw tree so no real raw
-sources or the iCloud vault are touched. They lock the scaffold idempotency
+sources or the synced vault are touched. They lock the scaffold idempotency
 contract and the index/log roll-up shapes the agent relies on.
 """
 

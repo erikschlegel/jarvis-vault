@@ -9,7 +9,7 @@ Read-only. Walks the vault wiki tree, parses inline markdown links, and reports:
 Usage:
     python3 scripts/verify_wiki.py [--vault PATH] [--manifest PATH]
 
-Defaults point at the live iCloud Obsidian vault and the repo manifest.
+Defaults point at the live synced Obsidian vault and the repo manifest.
 """
 
 from __future__ import annotations
@@ -22,9 +22,10 @@ from pathlib import Path
 
 from wiki_core import paths
 
-# Vault root and manifest resolve from WIKI_VAULT / WIKI_STATE (see paths).
-DEFAULT_VAULT = paths.default_vault()
-DEFAULT_MANIFEST = paths.state_path()
+# Vault root and manifest resolve lazily from WIKI_VAULT / WIKI_STATE (see
+# paths). default_vault() raises SystemExit with setup guidance when WIKI_VAULT
+# is unset, so it is resolved inside main() rather than at import time to keep
+# importing this module (e.g. during test collection) side-effect free.
 
 # Inline markdown links: [text](target). Skip image links handled the same way.
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -107,11 +108,12 @@ def collect_md_files(wiki_root: Path) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--vault", type=Path, default=DEFAULT_VAULT)
-    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--vault", type=Path, default=None)
+    parser.add_argument("--manifest", type=Path, default=None)
     args = parser.parse_args()
 
-    wiki_root: Path = args.vault
+    wiki_root: Path = args.vault if args.vault is not None else paths.default_vault()
+    manifest_path: Path = args.manifest if args.manifest is not None else paths.state_path()
     if not wiki_root.is_dir():
         print(f"ERROR: vault wiki root not found: {wiki_root}", file=sys.stderr)
         return 2
@@ -190,8 +192,8 @@ def main() -> int:
     # Reverse drift: source pages on disk not finalized as ingested in the manifest.
     drift: list[str] = []
     unfinalized: list[str] = []
-    if args.manifest.exists():
-        manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         sources_meta = manifest.get("sources", {})
         for tid, meta in sources_meta.items():
             if meta.get("status") != "ingested":

@@ -2,7 +2,7 @@
 
 These build a minimal but valid ``tmp_path`` vault plus manifest, then seed one
 deterministic defect per test and assert the corresponding linter section and
-exit code. No real raw sources or the iCloud vault are touched.
+exit code. No real raw sources or the synced vault are touched.
 """
 
 from __future__ import annotations

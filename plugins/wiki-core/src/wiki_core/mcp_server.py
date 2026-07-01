@@ -2,7 +2,7 @@
 """FastMCP server exposing the LLM Wiki hybrid retrieval engine.
 
 Runs as its own process (outside any editor sandbox) so it can read the
-iCloud Obsidian vault directly. The agent never touches the filesystem for
+synced Obsidian vault directly. The agent never touches the filesystem for
 wiki content — it calls these five tools instead.
 
 Tools:

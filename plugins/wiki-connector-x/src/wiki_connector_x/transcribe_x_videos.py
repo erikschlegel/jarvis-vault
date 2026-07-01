@@ -133,9 +133,15 @@ def probe_has_audio(path: Path) -> bool:
         return False
 
 
-def patch_source(src: Path, idx: int, stream: str, transcript_rel: str) -> None:
-    """Insert transcript: into the frontmatter video entry + Attachments line."""
-    lines = src.read_text(encoding="utf-8").splitlines()
+def _apply_transcript_patch(text: str, stream: str, transcript_rel: str) -> str:
+    """Return ``text`` with the transcript entries inserted (idempotent, pure).
+
+    Adds a frontmatter ``transcript:`` line after the matching ``stream:`` entry
+    and a ``- Video transcript:`` bullet after the matching Attachments stream
+    bullet, unless each already follows its anchor. No I/O, so callers can diff
+    the result against the original to decide whether a write is needed.
+    """
+    lines = text.splitlines()
     out: list[str] = []
     for i, line in enumerate(lines):
         out.append(line)
@@ -150,7 +156,37 @@ def patch_source(src: Path, idx: int, stream: str, transcript_rel: str) -> None:
             nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
             if not nxt.startswith("- Video transcript:"):
                 out.append(f"- Video transcript: `{transcript_rel}`")
-    src.write_text("\n".join(out) + "\n", encoding="utf-8")
+    return "\n".join(out) + "\n"
+
+
+def patch_source(src: Path, idx: int, stream: str, transcript_rel: str) -> None:
+    """Insert transcript: into the frontmatter video entry + Attachments line."""
+    src.write_text(
+        _apply_transcript_patch(src.read_text(encoding="utf-8"), stream, transcript_rel),
+        encoding="utf-8",
+    )
+
+
+def reconcile_frontmatter(src: Path, idx: int, stream: str, transcript_rel: str) -> bool:
+    """Patch the frontmatter transcript: line when the transcript file already exists.
+
+    build_worklist only surfaces videos whose frontmatter lacks a transcript: line,
+    but the processing loop skips when the transcript *file* is on disk. Those two
+    criteria can diverge (e.g. a git pull restores frontmatter while raw/assets
+    persists), stranding the source in the worklist forever. Calling this on the
+    file-exists path re-patches the frontmatter (idempotently) so the source drops
+    out of the worklist. Returns True if a change was written.
+
+    Short-circuits without touching the file when both the frontmatter
+    ``transcript:`` line and the Attachments bullet are already present, so a
+    no-op reconcile does not churn the source's mtime.
+    """
+    before = src.read_text(encoding="utf-8")
+    after = _apply_transcript_patch(before, stream, transcript_rel)
+    if after == before:
+        return False
+    src.write_text(after, encoding="utf-8")
+    return True
 
 
 def main() -> int:
@@ -183,12 +219,17 @@ def main() -> int:
     model = WhisperModel(args.model, device="cpu", compute_type="int8")
 
     done = 0
+    reconciled = 0
     for item in worklist:
         tid, idx, stream, src = item["tweet_id"], item["idx"], item["stream"], item["file"]
         transcript_path = tweet_asset_dir(tid) / f"video-{idx}-transcript.txt"
         transcript_rel = str(transcript_path.relative_to(paths.raw_root().parent))
         if transcript_path.exists() and transcript_path.stat().st_size > 0 and not args.force:
-            print(f"skip {tid} v{idx} (transcript exists)")
+            if reconcile_frontmatter(src, idx, stream, transcript_rel):
+                reconciled += 1
+                print(f"reconcile {tid} v{idx}: transcript file existed, patched frontmatter")
+            else:
+                print(f"skip {tid} v{idx} (transcript exists)")
             continue
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=True) as tmp:
             tmp_path = Path(tmp.name)
@@ -220,7 +261,7 @@ def main() -> int:
         done += 1
         print(f"  -> {transcript_rel} ({len(text)} chars, lang={info.language})")
 
-    print(f"\ntranscribed {done}/{len(worklist)} video(s).")
+    print(f"\ntranscribed {done}/{len(worklist)} video(s); reconciled {reconciled} frontmatter.")
     return 0
 
 

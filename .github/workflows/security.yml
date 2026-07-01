@@ -58,7 +58,7 @@ jobs:
         run: uvx pip-audit --requirement <(uv export --no-dev --format requirements-txt 2>/dev/null || echo "") 2>&1 || true
 
       - name: Run Bandit (SAST)
-        run: uvx bandit -r plugins/ -ll --exit-zero -f sarif -o bandit-results.sarif
+        run: uvx --from 'bandit[sarif]' bandit -r plugins/ -ll --exit-zero -f sarif -o bandit-results.sarif
 
       - name: Upload Bandit SARIF
         if: always() && hashFiles('bandit-results.sarif') != ''

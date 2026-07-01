@@ -1,5 +1,7 @@
 # jarvis-vault
 
+![jarvis-vault — Agentic LLM Wiki for Obsidian, powered by GitHub Copilot Skills](assets/project_banner.jpg)
+
 Personal knowledge base using [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
 The LLM incrementally builds and maintains a persistent, interlinked wiki from immutable raw sources. You curate inputs and ask questions; the agent summarizes, cross-references, and keeps the wiki current.

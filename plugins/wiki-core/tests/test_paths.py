@@ -63,6 +63,26 @@ def test_index_dir_explicit_override_wins(monkeypatch: pytest.MonkeyPatch) -> No
     assert paths.index_dir() == Path("/custom/index")
 
 
+def test_raw_root_falls_back_to_cache_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("WIKI_VAULT", raising=False)
+    monkeypatch.delenv("WIKI_RAW", raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", "/tmp/xdg-cache")
+    # Non-raising: keeps module-level constants (RAW_X, RAW_ASSETS_X) importable.
+    assert paths.raw_root() == Path("/tmp/xdg-cache/jarvis-vault/raw")
+
+
+def test_raw_root_uses_vault_sibling_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WIKI_VAULT", "/vault/wiki")
+    monkeypatch.delenv("WIKI_RAW", raising=False)
+    assert paths.raw_root() == Path("/vault/raw")
+
+
+def test_raw_root_explicit_override_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WIKI_VAULT", "/vault/wiki")
+    monkeypatch.setenv("WIKI_RAW", "/custom/raw")
+    assert paths.raw_root() == Path("/custom/raw")
+
+
 def test_layered_discovery_prefers_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The working directory's ``.env`` sorts ahead of every higher candidate."""
     monkeypatch.chdir(tmp_path)

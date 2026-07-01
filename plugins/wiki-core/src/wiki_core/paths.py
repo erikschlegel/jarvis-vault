@@ -134,15 +134,27 @@ def default_vault() -> Path:
 
 
 def raw_root() -> Path:
-    """Resolve the immutable raw sources root (``WIKI_RAW`` or ``<vault>/../raw``).
+    """Resolve the immutable raw sources root (non-raising).
 
-    Raw sources live as a sibling of the wiki inside the Obsidian vault, so the
-    default anchors on ``default_vault().parent``. Stored manifest/frontmatter
-    paths (``raw/x/...``) are relative to ``raw_root().parent``; readers and
-    writers join against that anchor so the strings stay stable wherever raw
-    physically lives.
+    ``WIKI_RAW`` wins; otherwise it is ``<vault>/../raw`` when a vault is
+    configured, or a user cache fallback when none is. Like ``index_dir()``, the
+    fallback keeps module-level path constants (``RAW_X``, ``RAW_ASSETS_X``, ...)
+    resolvable at import time even with ``WIKI_VAULT`` unset, so importing a
+    connector module never crashes; flows that genuinely need a configured vault
+    still fail loudly through ``default_vault()``.
+
+    Raw sources live as a sibling of the wiki inside the Obsidian vault. Stored
+    manifest/frontmatter paths (``raw/x/...``) are relative to
+    ``raw_root().parent``; readers and writers join against that anchor so the
+    strings stay stable wherever raw physically lives.
     """
-    return _env_path("WIKI_RAW") or (default_vault().parent / "raw")
+    explicit = _env_path("WIKI_RAW")
+    if explicit is not None:
+        return explicit
+    vault = find_vault()
+    if vault is not None:
+        return vault.parent / "raw"
+    return _user_cache_dir() / "raw"
 
 
 def inbox_root() -> Path:

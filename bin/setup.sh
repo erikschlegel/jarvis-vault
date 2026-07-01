@@ -351,9 +351,11 @@ print_plugin_steps() {
   info "   copilot plugin marketplace add ${REPO_ROOT}"
   info "   copilot plugin install wiki-core@${MARKETPLACE_NAME}"
   info "   copilot plugin install wiki-connector-x@${MARKETPLACE_NAME}"
+  info "   (installing materializes the skills into ~/.copilot/skills/)"
   info "2) Register the jarvis-vault MCP server (hybrid search):"
   info "   copilot mcp add jarvis-vault -- uv run --directory ${REPO_ROOT} wiki-mcp"
-  info "Restart the Copilot desktop app to load the skills and the MCP server."
+  info "CLI: the slash commands (see the command table in AGENTS.md) are available immediately."
+  info "Desktop app: relaunch it; the installed skills surface automatically (no slash commands)."
 }
 
 # --- Verification ------------------------------------------------------------
@@ -393,8 +395,8 @@ main() {
   ensure_deps
   ensure_env_and_vault
   run_wiki_init
-  verify
   print_plugin_steps
+  verify
 }
 
 main "$@"

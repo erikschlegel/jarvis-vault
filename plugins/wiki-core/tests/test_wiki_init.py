@@ -174,18 +174,37 @@ def _write_copilot_settings(home: Path, specs: dict[str, bool]) -> None:
     )
 
 
-def test_plugins_check_passes_when_both_enabled(
+def _materialize_skills(home: Path, skills: list[str]) -> None:
+    skills_dir = home / ".copilot" / "skills"
+    for skill in skills:
+        (skills_dir / skill).mkdir(parents=True, exist_ok=True)
+
+
+_ALL_SKILLS = ["wiki-ingest", "wiki-lint", "wiki-query", "x-import", "x-transcribe"]
+
+
+def test_plugin_skills_matches_repo_layout() -> None:
+    """PLUGIN_SKILLS must mirror ``plugins/<name>/skills/*/`` (drift guard).
+
+    The hard-coded map is the authoritative expectation that makes
+    ``_plugins_check`` able to detect a stale ``enabledPlugins`` flag; a runtime
+    directory scan would silently pass if it ever returned empty. Asserting the
+    invariant here catches drift at commit time instead: adding or removing a
+    skill directory without updating the constant fails this test.
+    """
+    repo = wiki_init._repo_root()
+    for plugin, skills in wiki_init.PLUGIN_SKILLS.items():
+        skills_dir = repo / "plugins" / plugin / "skills"
+        on_disk = {child.name for child in skills_dir.iterdir() if (child / "SKILL.md").is_file()}
+        assert set(skills) == on_disk, f"{plugin} skills drifted from {skills_dir}"
+
+
+def test_plugins_check_passes_when_skills_installed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     home = tmp_path / "home"
-    # One marketplace spec, one local-path spec — both forms must be recognised.
-    _write_copilot_settings(
-        home,
-        {
-            "wiki-core@jarvis-vault": True,
-            f"{tmp_path}/repo/plugins/wiki-connector-x": True,
-        },
-    )
+    _write_copilot_settings(home, {"wiki-core@jarvis-vault": True})
+    _materialize_skills(home, _ALL_SKILLS)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(wiki_init, "_repo_root", lambda: tmp_path / "repo")
     check = wiki_init._plugins_check()
@@ -193,11 +212,46 @@ def test_plugins_check_passes_when_both_enabled(
     assert check.ok is True
 
 
+def test_plugins_check_warns_when_enabled_but_not_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    # Both flags enabled, but no skills were materialized -- the stale-flag case.
+    _write_copilot_settings(
+        home,
+        {"wiki-core@jarvis-vault": True, "wiki-connector-x@jarvis-vault": True},
+    )
+    repo = tmp_path / "repo"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(wiki_init, "_repo_root", lambda: repo)
+    check = wiki_init._plugins_check()
+    assert check.ok is False
+    assert check.warn_only is True
+    assert "enabled but skills not installed" in check.detail
+    assert "copilot plugin install wiki-core@jarvis-vault" in check.detail
+    assert "copilot plugin install wiki-connector-x@jarvis-vault" in check.detail
+
+
+def test_plugins_check_reports_partial_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    _write_copilot_settings(home, {"wiki-core@jarvis-vault": True})
+    # wiki-connector-x fully installed; wiki-core missing one skill.
+    _materialize_skills(home, ["wiki-ingest", "wiki-lint", "x-import", "x-transcribe"])
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(wiki_init, "_repo_root", lambda: tmp_path / "repo")
+    check = wiki_init._plugins_check()
+    assert check.ok is False
+    assert "partial: missing wiki-query" in check.detail
+    assert "wiki-connector-x" not in check.detail
+
+
 def test_plugins_check_warns_and_prints_install_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     home = tmp_path / "home"
-    # A disabled plugin and an unrelated one — neither required plugin is enabled.
+    # A disabled plugin and an unrelated one -- neither required plugin is installed.
     _write_copilot_settings(home, {"wiki-core@jarvis-vault": False, "other@elsewhere": True})
     repo = tmp_path / "repo"
     monkeypatch.setenv("HOME", str(home))
@@ -212,6 +266,29 @@ def test_plugins_check_warns_and_prints_install_commands(
     assert "copilot plugin install wiki-connector-x@jarvis-vault" in check.detail
 
 
+def test_plugins_check_omits_marketplace_add_when_registered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    settings = home / ".copilot" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(
+        json.dumps(
+            {
+                "enabledPlugins": {"wiki-core@jarvis-vault": True},
+                "extraKnownMarketplaces": {"jarvis-vault": {}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(wiki_init, "_repo_root", lambda: tmp_path / "repo")
+    check = wiki_init._plugins_check()
+    assert check.ok is False
+    assert "copilot plugin marketplace add" not in check.detail
+    assert "copilot plugin install wiki-core@jarvis-vault" in check.detail
+
+
 def test_plugins_check_fail_soft_when_settings_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -220,6 +297,22 @@ def test_plugins_check_fail_soft_when_settings_missing(
     check = wiki_init._plugins_check()
     assert check.ok is False
     assert check.warn_only is True
+
+
+def test_copilot_cli_check_reports_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("wiki_core.wiki_init.shutil.which", lambda _: "/usr/local/bin/copilot")
+    check = wiki_init._copilot_cli_check()
+    assert check.ok is True
+    assert check.warn_only is True
+    assert check.detail == "/usr/local/bin/copilot"
+
+
+def test_copilot_cli_check_warns_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("wiki_core.wiki_init.shutil.which", lambda _: None)
+    check = wiki_init._copilot_cli_check()
+    assert check.ok is False
+    assert check.warn_only is True
+    assert "not found on PATH" in check.detail
 
 
 def test_print_diagnostics_warn_does_not_fail(capsys: pytest.CaptureFixture[str]) -> None:

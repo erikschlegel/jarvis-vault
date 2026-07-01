@@ -140,6 +140,11 @@ copilot plugin install erikschlegel/jarvis-vault:plugins/wiki-core
 
 The interactive-session equivalents are `/plugin marketplace add` and `/plugin install`. You can also enable plugins declaratively through the `enabledPlugins` map (a `{ "spec": true }` object, not an array) in `~/.copilot/settings.json` (all projects) or `.github/copilot/settings.json` (this repo), using local-path specs such as `<repo>/plugins/wiki-core` and `<repo>/plugins/wiki-connector-x`. Restart the Copilot desktop app afterward to load them.
 
+An `enabledPlugins` flag on its own is only an intent, not an install: `copilot plugin install` is what materializes each plugin's skills into `~/.copilot/skills/` (for example `wiki-ingest`, `wiki-query`, `wiki-lint`, `x-import`, `x-transcribe`). If the flag is set but that install never ran, the desktop app surfaces nothing and the CLI has no slash commands. `uv run wiki-doctor` reports this precisely — it inspects the materialized skill directories rather than the flag, and prints the exact `copilot plugin install` command to remediate. After installing:
+
+- **CLI**: the slash commands (see the command table in [AGENTS.md](AGENTS.md#commands)) are available in the next session.
+- **Desktop app**: relaunch it; the installed skills surface automatically (the desktop app has no slash commands).
+
 The plugin delivers only the skills. The engine still resolves your vault from `WIKI_VAULT`, so run `bin/setup.sh` or the manual steps above, then verify with `uv run wiki-doctor`.
 
 ## Troubleshooting

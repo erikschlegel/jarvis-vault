@@ -42,6 +42,14 @@ MARKETPLACE_NAME = "jarvis-vault"
 # Skill plugins a Copilot client must install to surface the wiki skills.
 REQUIRED_PLUGINS: tuple[str, ...] = ("wiki-core", "wiki-connector-x")
 
+# Skills each plugin materializes into ~/.copilot/skills/ once installed. The
+# presence of these directories -- not merely an enabledPlugins flag -- is the
+# authoritative signal that a plugin was actually installed.
+PLUGIN_SKILLS: dict[str, tuple[str, ...]] = {
+    "wiki-core": ("wiki-ingest", "wiki-lint", "wiki-query"),
+    "wiki-connector-x": ("x-import", "x-transcribe"),
+}
+
 
 @dataclass
 class Diagnostic:
@@ -244,30 +252,119 @@ def _plugin_enabled(name: str, specs: list[str]) -> bool:
     return any(spec == marketplace or spec.rstrip("/").endswith(suffix) for spec in specs)
 
 
-def _plugins_check() -> Diagnostic:
-    """Report whether the wiki skill plugins are enabled in a Copilot client.
+def _copilot_skills_dir() -> Path:
+    """Locate the Copilot skills directory where installed plugins materialize skills.
 
-    Warn-only: the plugins are a desktop/CLI convenience that is never present in
-    a headless or CI run, so a miss must not flip the doctor exit code. On a miss
-    the detail embeds the exact ``copilot plugin`` commands to install them.
+    Derived from ``Path.home()`` so a relocated ``$HOME`` (devcontainer, CI, or a
+    containerized run) resolves correctly without any extra configuration.
+    """
+    return Path.home() / ".copilot" / "skills"
+
+
+def _installed_skill_dirs() -> set[str]:
+    """Return the skill directory names present in the Copilot skills dir (fail-soft).
+
+    A missing or unreadable skills directory yields an empty set rather than
+    raising, mirroring the other best-effort client-config probes.
+    """
+    try:
+        return {child.name for child in _copilot_skills_dir().iterdir() if child.is_dir()}
+    except OSError:
+        return set()
+
+
+def _missing_plugin_skills(name: str, installed: set[str]) -> list[str]:
+    """Return the plugin's expected skills that are absent from the skills dir."""
+    return [skill for skill in PLUGIN_SKILLS.get(name, ()) if skill not in installed]
+
+
+def _marketplace_registered() -> bool:
+    """Best-effort check that the jarvis-vault marketplace is registered (fail-soft).
+
+    Reads the same Copilot settings files as ``_enabled_plugin_specs``; a missing
+    or unparseable file contributes nothing rather than raising.
+    """
+    candidates = [
+        Path.home() / ".copilot" / "settings.json",
+        _repo_root() / ".github" / "copilot" / "settings.json",
+    ]
+    for path in candidates:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        markets = data.get("extraKnownMarketplaces") if isinstance(data, dict) else None
+        if isinstance(markets, dict) and MARKETPLACE_NAME in markets:
+            return True
+    return False
+
+
+def _copilot_cli_check() -> Diagnostic:
+    """Report whether the GitHub Copilot CLI is on PATH.
+
+    Warn-only: the CLI is a client-side convenience that is legitimately absent in
+    a headless or CI run, so a miss must not flip the doctor exit code. Its
+    absence explains why a plugin can never actually install.
+    """
+    found = shutil.which("copilot")
+    if found:
+        return Diagnostic("copilot cli", True, found, warn_only=True)
+    return Diagnostic(
+        "copilot cli",
+        False,
+        "not found on PATH -- install: "
+        "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
+        warn_only=True,
+    )
+
+
+def _plugins_check() -> Diagnostic:
+    """Report whether the wiki skill plugins are installed in a Copilot client.
+
+    The authoritative signal is the *materialized* skills in ``~/.copilot/skills/``,
+    not merely an ``enabledPlugins`` flag: a stale or hand-edited flag can be set
+    without ``copilot plugin install`` ever having run, in which case the desktop
+    app surfaces nothing. Warn-only -- the plugins are a client-side convenience
+    absent in headless or CI runs, so a miss must not flip the doctor exit code.
+    On a miss the detail names each plugin's state and embeds the exact
+    ``copilot plugin install`` commands to self-remediate.
     """
     specs = _enabled_plugin_specs()
-    missing = [name for name in REQUIRED_PLUGINS if not _plugin_enabled(name, specs)]
-    if not missing:
+    installed = _installed_skill_dirs()
+
+    not_installed: list[str] = []
+    states: list[str] = []
+    for name in REQUIRED_PLUGINS:
+        missing_skills = _missing_plugin_skills(name, installed)
+        if not missing_skills:
+            continue
+        not_installed.append(name)
+        expected = PLUGIN_SKILLS.get(name, ())
+        if len(missing_skills) < len(expected):
+            states.append(f"{name} (partial: missing {', '.join(missing_skills)})")
+        elif _plugin_enabled(name, specs):
+            states.append(f"{name} (enabled but skills not installed)")
+        else:
+            states.append(f"{name} (not installed)")
+
+    if not not_installed:
         return Diagnostic(
             "skill plugins",
             True,
-            ", ".join(REQUIRED_PLUGINS) + " enabled",
+            ", ".join(REQUIRED_PLUGINS) + " installed",
             warn_only=True,
         )
-    commands = "; ".join(
-        [f"copilot plugin marketplace add {_repo_root()}"]
-        + [f"copilot plugin install {name}@{MARKETPLACE_NAME}" for name in REQUIRED_PLUGINS]
+
+    command_lines: list[str] = []
+    if not _marketplace_registered():
+        command_lines.append(f"copilot plugin marketplace add {_repo_root()}")
+    command_lines.extend(
+        f"copilot plugin install {name}@{MARKETPLACE_NAME}" for name in not_installed
     )
     return Diagnostic(
         "skill plugins",
         False,
-        f"not enabled: {', '.join(missing)} -- install with: {commands}",
+        f"{', '.join(states)} -- install with: {'; '.join(command_lines)}",
         warn_only=True,
     )
 
@@ -315,6 +412,7 @@ def diagnose() -> list[Diagnostic]:
         )
     checks.append(_scripts_check())
     checks.append(_mcp_check())
+    checks.append(_copilot_cli_check())
     checks.append(_plugins_check())
     return checks
 

@@ -312,8 +312,9 @@ def _copilot_cli_check() -> Diagnostic:
     return Diagnostic(
         "copilot cli",
         False,
-        "not found on PATH -- install: "
-        "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
+        "optional -- not found on PATH; needed only to install plugins and run "
+        "slash commands from the CLI (the desktop app surfaces skills without it). "
+        "Install: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
         warn_only=True,
     )
 

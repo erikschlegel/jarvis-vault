@@ -39,9 +39,6 @@ EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 EXIT_ERROR = 2
 
-DEFAULT_CONFIG = ingest_plan.DEFAULT_CONFIG
-DEFAULT_STATE = ingest_plan.DEFAULT_STATE
-
 # Sentinel marking a page as a not-yet-filled scaffold. Its presence makes
 # re-scaffolding safe; its absence means the agent has written real content and
 # the page must not be clobbered.
@@ -568,8 +565,8 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
+    parser.add_argument("--config", type=Path, default=paths.config_path())
+    parser.add_argument("--state", type=Path, default=paths.state_path())
     parser.add_argument("--vault", type=Path, help="Override the destination vault path.")
     parser.add_argument("--domain", help="Routing domain whose vault to target (log/index).")
     parser.add_argument("--dry-run", action="store_true", help="Show the change without writing.")

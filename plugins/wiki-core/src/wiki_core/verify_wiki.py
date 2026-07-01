@@ -22,9 +22,10 @@ from pathlib import Path
 
 from wiki_core import paths
 
-# Vault root and manifest resolve from WIKI_VAULT / WIKI_STATE (see paths).
-DEFAULT_VAULT = paths.default_vault()
-DEFAULT_MANIFEST = paths.state_path()
+# Vault root and manifest resolve lazily from WIKI_VAULT / WIKI_STATE (see
+# paths). default_vault() raises SystemExit with setup guidance when WIKI_VAULT
+# is unset, so it is resolved inside main() rather than at import time to keep
+# importing this module (e.g. during test collection) side-effect free.
 
 # Inline markdown links: [text](target). Skip image links handled the same way.
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -107,8 +108,8 @@ def collect_md_files(wiki_root: Path) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--vault", type=Path, default=DEFAULT_VAULT)
-    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--vault", type=Path, default=paths.default_vault())
+    parser.add_argument("--manifest", type=Path, default=paths.state_path())
     args = parser.parse_args()
 
     wiki_root: Path = args.vault

@@ -24,7 +24,9 @@ The deterministic engine is mandatory however you drive it: the skills and the M
 | Python 3.12+ | Engine runtime (uv installs a managed build if needed) |
 | A vault folder | Holds `wiki/` and its `raw/` sibling |
 
-There are three ways in:
+You install one way, then interact another. The three paths below get the engine and skills onto your machine; after that you drive the wiki through an interaction surface — the GitHub Copilot desktop app, the Copilot CLI, or VS Code — all reading the same vault. For newcomers the recommended combination is **install path 1** (clone + `bin/setup.sh`) paired with the **desktop app** as your interaction surface — see [Interaction surfaces](#interaction-surfaces) below.
+
+Install paths:
 
 1. **Clone and run setup (recommended).** One idempotent script detects your toolchain, seeds the vault, builds the index, and prints the commands to install the skill plugins and register the MCP server:
 
@@ -43,6 +45,20 @@ See [SETUP.md](SETUP.md) for the full walkthrough: requirements, the manual path
 The engine is files-first and degrades gracefully: even without the MCP server, every wiki page is plain markdown you can read and edit directly, and the `wiki-search` CLI covers retrieval. See the access tiers in [AGENTS.md](AGENTS.md) for the full files → CLI → MCP progression.
 
 For the X (Twitter) connector — API credentials, fetching likes and bookmarks, local video transcription — continue with the [wiki-connector-x setup](plugins/wiki-connector-x/README.md#setup).
+
+## Interaction surfaces
+
+Installing the engine and skills is one axis; how you *drive* the wiki is another. Once setup is done, you interact through one of three surfaces — all reading the same vault, so you can switch between them freely.
+
+| Surface | Slash-commands | Best for |
+|---------|----------------|----------|
+| [GitHub Copilot desktop app](https://github.com/features/ai/github-app) | No — the installed skills surface automatically | Newcomers: the friendliest chat canvas over the vault |
+| [Copilot CLI](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli) | Yes — `/wiki`, `/ingest`, `/query`, `/lint`, and the rest | Terminal-driven work with explicit command control |
+| VS Code | Through the bundled `jarvis-vault` MCP server | Editing wiki pages in the editor alongside chat |
+
+The desktop app is the recommended surface for newcomers. It becomes your canvas over the Obsidian vault, where you ingest, query, and lint entirely in chat, and it runs the installed skills through its own bundled runtime — so no `copilot` binary is required to use them. It does not replace setup: the engine install (path 1 above) and a one-time `copilot plugin install` (via the standalone Copilot CLI) still happen at a terminal.
+
+A good first move on any surface is to ask Copilot to check your setup. It runs `wiki-doctor` end to end and surfaces any configuration mismatch — `WIKI_VAULT` unset, an unseeded vault, a missing search index, an unregistered MCP server, or an uninstalled plugin — each with the exact remediation, so Copilot can apply the fix with you. In the Copilot CLI the `/wiki` command runs this same check directly. See [SETUP.md](SETUP.md#github-copilot-cli-and-desktop) for desktop registration and plugin install.
 
 ## Install as a Copilot plugin
 
@@ -64,9 +80,25 @@ copilot plugin install erikschlegel/jarvis-vault:plugins/wiki-core
 
 Inside an interactive `copilot` session the equivalents are `/plugin marketplace add erikschlegel/jarvis-vault` and `/plugin install wiki-core@jarvis-vault`. Manage installs with `copilot plugin list`, `copilot plugin update --all`, and `copilot plugin uninstall NAME`.
 
+These `copilot` commands use the standalone [Copilot CLI](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli), a separate install from the desktop app. You need it **once** to materialize the skills into `~/.copilot/skills/`; the desktop app then surfaces them on relaunch through its own bundled runtime, with no `copilot` binary required to use them. That is why `wiki-doctor` reports a missing `copilot` as a warning, not a failure — it is needed for plugin install and refresh, not for day-to-day use.
+
 Installing the plugins gives you the skills; the deterministic engine still resolves your vault from `WIKI_VAULT`, so complete the [Setup](#setup) steps regardless of how you install.
 
-The plugins also register slash-commands you invoke explicitly — `/wiki`, `/ingest`, `/query`, `/lint`, `/save`, `/pending`, and `/setup` from `wiki-core`, plus `/x-import` and `/x-transcribe` from `wiki-connector-x`. They are thin wrappers that route to the matching skill; see each plugin README for the full list.
+The plugins also register slash-commands you invoke explicitly. In the Copilot CLI they route to the matching skill; the desktop app has no slash-commands, so there the same skills surface automatically instead.
+
+| Command | Plugin | What it does |
+|---------|--------|--------------|
+| `/wiki` | wiki-core | Orientation dashboard: runs `wiki-doctor`, shows the pulse, and lists the `wiki-plan` worklist |
+| `/ingest [source]` | wiki-core | Fold a `raw/` source into the wiki (no argument ingests the next worklist item) |
+| `/query <question>` | wiki-core | Answer a question against the wiki, with citations |
+| `/lint [domain]` | wiki-core | Health-check the wiki and fix issues with approval |
+| `/save [title]` | wiki-core | File the current durable answer into the vault's `comparisons/` |
+| `/pending [domain]` | wiki-core | Read-only summary of the ingest worklist |
+| `/setup` | wiki-core | Seed the vault (`wiki-init`), then verify with `wiki-doctor` |
+| `/x-import [path]` | wiki-connector-x | Import X likes and bookmarks into `raw/` |
+| `/x-transcribe` | wiki-connector-x | Backfill transcripts for caption-less X videos |
+
+See [AGENTS.md](AGENTS.md#commands) for the canonical command reference.
 
 ## Workflow
 
@@ -94,7 +126,7 @@ The engine exposes console entry points (`wiki-plan`, `wiki-pages`, `wiki-search
 
 ## Obsidian vault
 
-The wiki lives in your external Obsidian vault — markdown on disk, git for history. Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase. Point `WIKI_VAULT` at the vault's wiki root, and seed a fresh vault from the structure template in [plugins/wiki-core/templates/vault/](plugins/wiki-core/templates/vault/) (see the [wiki-core README](plugins/wiki-core/README.md) for the bootstrap command). The vault's `index.md` is the catalog and `log.md` the timeline.
+The wiki lives in your external Obsidian vault — markdown on disk, git for history. Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase. Point `WIKI_VAULT` at the vault's wiki root, and seed a fresh vault from the structure template in [plugins/wiki-core/templates/vault/](plugins/wiki-core/templates/vault/) (see the [wiki-core README](plugins/wiki-core/README.md) for the bootstrap command). The vault's `index.md` is the catalog and `log.md` the timeline. New to Obsidian? Install it from [obsidian.md](https://obsidian.md/) and follow the official [getting-started guide](https://help.obsidian.md/Getting+started) to create your first vault.
 
 Raw sources live in the vault alongside the wiki (`raw/`, a sibling of the wiki root, with attachments under `raw/assets/`).
 

@@ -94,7 +94,7 @@ The `jarvis-vault` MCP server (`wiki-mcp`) exposes the wiki to assistants that s
 
 ### GitHub Copilot CLI and desktop
 
-The Copilot CLI auto-starts MCP servers listed in `~/.copilot/mcp-config.json`. Register the server once and it starts on every launch:
+The [GitHub Copilot desktop app](https://github.com/features/ai/github-app) and the Copilot CLI share the same MCP configuration. The Copilot CLI auto-starts MCP servers listed in `~/.copilot/mcp-config.json`. Register the server once and it starts on every launch:
 
 ```bash
 copilot mcp add jarvis-vault -- uv run --directory /path/to/jarvis-vault wiki-mcp
@@ -144,6 +144,8 @@ An `enabledPlugins` flag on its own is only an intent, not an install: `copilot 
 
 - **CLI**: the slash commands (see the command table in [AGENTS.md](AGENTS.md#commands)) are available in the next session.
 - **Desktop app**: relaunch it; the installed skills surface automatically (the desktop app has no slash commands).
+
+The `copilot` commands here use the standalone [Copilot CLI](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli), a separate install from the desktop app. You need it **once** to install or refresh these plugins; running Copilot in the desktop app afterward does not require it, since the app ships its own bundled runtime. This is why `wiki-doctor` treats a missing `copilot` as a warning rather than a failure — it gates plugin install and refresh, not everyday use.
 
 The plugin delivers only the skills. The engine still resolves your vault from `WIKI_VAULT`, so run `bin/setup.sh` or the manual steps above, then verify with `uv run wiki-doctor`.
 

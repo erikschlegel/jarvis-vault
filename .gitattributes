@@ -1,0 +1,39 @@
+# Normalize line endings on commit; auto-detect text vs binary
+* text=auto eol=lf
+
+# Explicit text files
+*.py      text diff=python
+*.pyi     text diff=python
+*.md      text
+*.txt     text
+*.json    text
+*.jsonl   text
+*.toml    text
+*.yaml    text
+*.yml     text
+*.cfg     text
+*.ini     text
+*.sh      text eol=lf
+*.lock    text
+
+# Scripts must stay LF regardless of platform
+bin/*     text eol=lf
+
+# Binary assets (never diff or normalize)
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.svg     text
+*.ico     binary
+*.pdf     binary
+*.mp4     binary
+*.mov     binary
+*.woff    binary
+*.woff2   binary
+*.zip     binary
+*.gz      binary
+
+# Keep generated lock file out of diffs but still versioned
+uv.lock   -diff linguist-generated=true

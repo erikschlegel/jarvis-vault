@@ -10,9 +10,42 @@ from typing import Any
 from wiki_core import paths
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-RAW_X = paths.raw_root() / "x"
-RAW_LIKES = RAW_X / "likes"
-RAW_BOOKMARKS = RAW_X / "bookmarks"
+
+
+def _raw_x() -> Path:
+    return paths.raw_root() / "x"
+
+
+# Convenience aliases — evaluated lazily so importing this module without
+# WIKI_VAULT set (e.g. during pytest collection) does not raise SystemExit.
+def raw_x() -> Path:
+    return _raw_x()
+
+
+def raw_likes() -> Path:
+    return _raw_x() / "likes"
+
+
+def raw_bookmarks() -> Path:
+    return _raw_x() / "bookmarks"
+
+
+# Legacy module-level names for code that already references them directly.
+# These are resolved on first access via module __getattr__ so they are
+# safe to have in a module that is imported during test collection.
+RAW_X: Path  # assigned in __getattr__
+RAW_LIKES: Path
+RAW_BOOKMARKS: Path
+
+
+def __getattr__(name: str) -> Path:
+    if name == "RAW_X":
+        return _raw_x()
+    if name == "RAW_LIKES":
+        return _raw_x() / "likes"
+    if name == "RAW_BOOKMARKS":
+        return _raw_x() / "bookmarks"
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def slugify(text: str, max_len: int = 60) -> str:

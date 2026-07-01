@@ -28,11 +28,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from wiki_core import paths
-
-RAW_X = paths.raw_root() / "x"
-RAW_LIKES = RAW_X / "likes"
-RAW_BOOKMARKS = RAW_X / "bookmarks"
+from wiki_connector_x.x_source_io import raw_bookmarks, raw_likes, raw_x
 
 JS_ASSIGNMENT = re.compile(r"^\s*window\.YTD\.\w+\.part\d*\s*=\s*", re.MULTILINE)
 
@@ -179,7 +175,7 @@ def import_archive_likes(archive_dir: Path, months: int, dry_run: bool) -> tuple
         handle = (like.get("authorScreenName") or like.get("screenName") or "i").lstrip("@")
         url = like.get("expandedUrl") or f"https://x.com/{handle}/status/{tweet_id}"
         preview = text[:80] if text else tweet_id
-        out = RAW_LIKES / tweet_filename(tweet_id, author, preview)
+        out = raw_likes() / tweet_filename(tweet_id, author, preview)
         body = render_source_md(
             source_type="x-like-archive",
             tweet_id=tweet_id,
@@ -227,7 +223,7 @@ def import_xarchive_bookmarks(json_path: Path, months: int, dry_run: bool) -> tu
             "retweets": item.get("retweet_count") or item.get("retweets") or 0,
         }
         preview = text[:80] if text else tweet_id
-        out = RAW_BOOKMARKS / tweet_filename(tweet_id, author, preview)
+        out = raw_bookmarks() / tweet_filename(tweet_id, author, preview)
         body = render_source_md(
             source_type="x-bookmark-xarchive",
             tweet_id=tweet_id,
@@ -313,14 +309,14 @@ def main() -> int:
         totals_skipped += s
 
     if args.clips:
-        dest = RAW_X / "clips-imported"
+        dest = raw_x() / "clips-imported"
         c, s = import_clip_folder(args.clips, dest, args.dry_run)
         print(f"Clips copied: {c} created, {s} skipped")
         totals_created += c
         totals_skipped += s
 
     action = "Would write" if args.dry_run else "Wrote"
-    print(f"\n{action} {totals_created} raw source file(s) under {RAW_X}")
+    print(f"\n{action} {totals_created} raw source file(s) under {raw_x()}")
     if totals_created:
         print("Next: ask your agent to ingest new sources from raw/x/ into wiki/")
     return 0

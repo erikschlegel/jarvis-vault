@@ -33,7 +33,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from wiki_core import ingest_plan, paths
+from wiki_core import ingest_plan, paths, source_adapter
 
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
@@ -82,12 +82,12 @@ def resolve_vault(config: dict[str, Any], domain: str, vault_arg: Path | None) -
 
 
 def plan_records(config: dict[str, Any], state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Map tweet_id -> plan record across every bucket (all domains)."""
+    """Map source_id -> plan record across every bucket (all domains)."""
     plan = ingest_plan.compute_plan(config, state, domain_filter=None, all_domains=True)
     records: dict[str, dict[str, Any]] = {}
     for bucket in plan["buckets"].values():
         for record in bucket:
-            records[record["tweet_id"]] = record
+            records[record["source_id"]] = record
     return records
 
 
@@ -95,45 +95,38 @@ def plan_records(config: dict[str, Any], state: dict[str, Any]) -> dict[str, dic
 # scaffold
 # --------------------------------------------------------------------------- #
 def build_scaffold(record: dict[str, Any], raw_text: str, *, ingested_date: str) -> str:
-    """Render a source-page skeleton for one raw source."""
+    """Render a source-page skeleton for one raw source.
+
+    Generic across content types: the OKF reserved keys plus the two uniform
+    identity keys (``source_type``/``source_id``) are written here, and the
+    responsible ``SourceAdapter`` contributes any extra frontmatter lines and
+    body notices for its content type.
+    """
     fm, body = ingest_plan.parse_frontmatter(raw_text)
-    handle = ingest_plan.derive_handle(fm)
-    tweet_id = record["tweet_id"]
-    author = fm.get("author", "") or record.get("author", "")
-    url = (
-        fm.get("source_url")
-        or fm.get("tweet_url")
-        or fm.get("post_url")
-        or fm.get("url")
-        or f"https://x.com/{handle or 'i'}/status/{tweet_id}"
-    )
-    clean = ingest_plan.extract_tweet_text(body)
-    has_video = bool(record.get("has_video"))
-    has_transcript = bool(re.search(r"transcript:\s*\S", raw_text))
+    source_type = str(record["source_type"])
+    source_id = record["source_id"]
+    adapter = source_adapter.adapter_by_type(source_type)
+    url = adapter.resource_url(fm, source_id)
+    clean = adapter.clean_body(fm, body)
 
     fm_lines = [
         "---",
         "type: source",
         f'title: "{TITLE_PLACEHOLDER}"',
-        f'tweet_id: "{tweet_id}"',
-    ]
-    if author:
-        fm_lines.append(f"author: {author}")
-    if handle:
-        fm_lines.append(f"author_handle: {handle}")
-    fm_lines += [
+        f"source_type: {source_type}",
+        f'source_id: "{source_id}"',
         f"domain: {record['domain']}",
         f"resource: {url}",
         f"raw: {record['file']}",
         f"timestamp: {ingested_date}",
         "tags: []",
-        f"has_video: {str(has_video).lower()}",
-        f"video_transcribed: {str(has_transcript).lower()}",
-        "---",
     ]
+    fm_lines += adapter.scaffold_frontmatter(record, fm, raw_text)
+    fm_lines.append("---")
 
-    quote = clean if clean else "_(no text body — see video transcript)_"
-    source_label = f"@{handle} on X" if handle else f"{author or 'source'} on X"
+    quote = clean if clean else "_(no text body — see attached media)_"
+    label = adapter.source_label(fm)
+    source_line = f"**Source:** [{label}]({url})" if url else f"**Source:** {label}"
 
     parts = [
         "\n".join(fm_lines),
@@ -142,14 +135,12 @@ def build_scaffold(record: dict[str, Any], raw_text: str, *, ingested_date: str)
         "",
         f"> {quote}",
         "",
-        f"**Source:** [{source_label}]({url})",
+        source_line,
     ]
-    if has_video and not has_transcript:
-        parts += [
-            "",
-            "> [!warning] Video not yet transcribed — spoken content is not ingestible. "
-            "Run the x-transcribe skill, then re-scaffold.",
-        ]
+    notices = adapter.scaffold_notices(record, fm, raw_text)
+    if notices:
+        parts.append("")
+        parts += notices
     parts += [
         "",
         SCAFFOLD_SENTINEL,
@@ -214,10 +205,10 @@ def cmd_scaffold(args: argparse.Namespace) -> int:
     ingested_date = args.date or today_iso()
 
     exit_code = EXIT_SUCCESS
-    for tweet_id in args.tweet_ids:
-        record = records.get(tweet_id)
+    for source_id in args.source_ids:
+        record = records.get(source_id)
         if record is None:
-            logger.error("scaffold: no raw source found for %s", tweet_id)
+            logger.error("scaffold: no raw source found for %s", source_id)
             exit_code = EXIT_FAILURE
             continue
         try:
@@ -235,11 +226,11 @@ def cmd_scaffold(args: argparse.Namespace) -> int:
         )
         if status == "skip-filled":
             logger.warning(
-                "scaffold: %s already filled (use --force to overwrite): %s", tweet_id, page
+                "scaffold: %s already filled (use --force to overwrite): %s", source_id, page
             )
             exit_code = EXIT_FAILURE
         else:
-            logger.info("scaffold: %s -> %s (%s)", tweet_id, page, status)
+            logger.info("scaffold: %s -> %s (%s)", source_id, page, status)
     return exit_code
 
 
@@ -291,9 +282,11 @@ def _fm_keys(fm_lines: list[str]) -> set[str]:
 def migrate_source_text(text: str) -> tuple[str, bool]:
     """Bring one source page's frontmatter to OKF reserved names. Idempotent.
 
-    Renames ``source_url``→``resource`` and ``ingested``→``timestamp``, and
-    inserts ``title`` (from the H1) and ``tags: []`` when absent. Returns
-    ``(new_text, changed)``; ``changed`` is ``False`` for an already-migrated page.
+    Renames ``source_url``→``resource``, ``ingested``→``timestamp``, and
+    ``tweet_id``→``source_id``; inserts ``title`` (from the H1), ``source_type:
+    x`` (existing vault pages predate multi-connector support and are all X),
+    and ``tags: []`` when absent. Returns ``(new_text, changed)``; ``changed`` is
+    ``False`` for an already-migrated page.
     """
     split = _split_frontmatter(text)
     if split is None:
@@ -309,6 +302,9 @@ def migrate_source_text(text: str) -> tuple[str, bool]:
         elif line.startswith("ingested:"):
             line = "timestamp:" + line[len("ingested:") :]
             changed = True
+        elif line.startswith("tweet_id:"):
+            line = "source_id:" + line[len("tweet_id:") :]
+            changed = True
         renamed.append(line)
 
     keys = _fm_keys(renamed)
@@ -321,6 +317,15 @@ def migrate_source_text(text: str) -> tuple[str, bool]:
                 insert_at = idx + 1
                 break
         renamed.insert(insert_at, f'title: "{title}"')
+        changed = True
+    # Stamp `source_type: x` after `source_id:` (existing pages are all X).
+    if "source_type" not in keys:
+        insert_at = len(renamed) - 1
+        for idx, line in enumerate(renamed):
+            if line.startswith("source_id:"):
+                insert_at = idx + 1
+                break
+        renamed.insert(insert_at, "source_type: x")
         changed = True
     # Append `tags: []` just before the closing fence.
     if "tags" not in keys:
@@ -574,7 +579,7 @@ def create_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_scaffold = sub.add_parser("scaffold", help="Write source-page skeletons.")
-    p_scaffold.add_argument("tweet_ids", nargs="+", metavar="TWEET_ID")
+    p_scaffold.add_argument("source_ids", nargs="+", metavar="SOURCE_ID")
     p_scaffold.add_argument("--date", help="ingested date (default: today).")
     p_scaffold.add_argument(
         "--force", action="store_true", help="Overwrite a page even if already filled."

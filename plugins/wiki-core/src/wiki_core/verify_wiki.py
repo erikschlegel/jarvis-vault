@@ -61,7 +61,10 @@ FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z0-9_]+):\s*(.*)$")
 # reserved `type`; sources use the reserved `resource`/`timestamp`/`title` names.
 # OKF hard-requires only `type` — `tags` is an optional reserved key (see below).
 REQUIRED_FRONTMATTER: dict[str, tuple[str, tuple[str, ...]]] = {
-    "sources": ("source", ("tweet_id", "resource", "raw", "timestamp", "domain")),
+    "sources": (
+        "source",
+        ("resource", "raw", "timestamp", "domain", "source_id", "source_type"),
+    ),
     "entities": ("entity", ("entity_kind", "name", "domain")),
     "concepts": ("concept", ("name", "domain")),
     "comparisons": ("comparison", ("title",)),
@@ -205,15 +208,15 @@ def main() -> int:
             if not (wiki_root / page).exists():
                 drift.append(f"{tid}: {page} (missing on disk)")
 
-        status_by_id = {tid: meta.get("status") for tid, meta in sources_meta.items()}
+        status_by_id = {sid: meta.get("status") for sid, meta in sources_meta.items()}
         for p in md_files:
             parts = p.relative_to(wiki_root).parts
             if not parts or parts[0] != "sources":
                 continue
-            tweet_id = parse_frontmatter(text_by_path[p]).get("tweet_id", "").strip("\"'")
-            if not tweet_id:
+            source_id = parse_frontmatter(text_by_path[p]).get("source_id", "").strip("\"'")
+            if not source_id:
                 continue  # already surfaced by the frontmatter schema check
-            status = status_by_id.get(tweet_id)
+            status = status_by_id.get(source_id)
             if status != "ingested":
                 unfinalized.append(f"{rel(p)}: manifest status '{status or '(absent)'}'")
 

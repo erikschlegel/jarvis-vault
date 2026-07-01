@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Compute the incremental ingest worklist for the LLM Wiki.
 
-Enumerates the immutable raw X sources, classifies each into a routing domain,
+Enumerates the immutable raw sources, classifies each into a routing domain,
 hashes its body, and compares against the ingest manifest and the destination
 vault to emit a delta worklist (new / changed / missing / parked / noise /
 up-to-date). Only sources in enabled domains land in the worklist the agent
 compiles into the wiki.
+
+Source-type specifics (identity derivation, body cleaning, asset flags) live in
+``SourceAdapter`` implementations discovered through the ``wiki_core.source_adapters``
+entry-point group; this planner stays connector-agnostic and dispatches per file.
 
 Read-only by default. Pass --update-manifest to persist proposed domain
 classifications and content hashes for not-yet-finalized sources (status
@@ -20,6 +24,7 @@ Usage:
   python3 scripts/ingest_plan.py --all-domains         # include disabled domains
   python3 scripts/ingest_plan.py --update-manifest      # persist classifications
   python3 scripts/ingest_plan.py --mark-ingested ID...  # finalize ingested sources
+  python3 scripts/ingest_plan.py --mark-noise ID...     # permanently skip sources
 
 Exit codes: 0 success, 1 failure, 2 configuration/argument error.
 """
@@ -35,7 +40,7 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from wiki_core import paths
+from wiki_core import paths, source_adapter
 
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
@@ -47,20 +52,6 @@ EXIT_ERROR = 2
 # import would break simply importing the module (e.g. during test collection).
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
-STATUS_ID_RE = re.compile(r"/status/(\d+)")
-HANDLE_RE = re.compile(r"x\.com/([^/]+)")
-BOILERPLATE_PREFIXES = (
-    "# ",
-    "**Author:",
-    "**Tweet:",
-    "**Source:",
-    "**Original",
-    "**Saved:",
-    "**Posted:",
-    "**Likes:",
-    "**Retweets:",
-    "**Replies:",
-)
 
 logger = logging.getLogger(__name__)
 
@@ -98,72 +89,22 @@ def slugify(text: str, max_len: int = 60) -> str:
     return (slug[:max_len] or "tweet").strip("-")
 
 
-def derive_tweet_id(fm: dict[str, str], path: Path) -> str:
-    """Resolve a stable status ID across the like/bookmark and clips schemas.
-
-    Prefers the explicit ``tweet_id`` field, then a ``/status/<id>`` segment in
-    any URL field (clips use ``post_url``), then leading digits in the filename.
-    """
-    if fm.get("tweet_id"):
-        return fm["tweet_id"]
-    for key in ("tweet_url", "post_url", "url"):
-        match = STATUS_ID_RE.search(fm.get(key, ""))
-        if match:
-            return match.group(1)
-    leading = re.match(r"(\d{6,})", path.name)
-    return leading.group(1) if leading else path.stem
-
-
-def derive_handle(fm: dict[str, str]) -> str:
-    """Resolve the author handle across schemas (``author_handle`` or URL)."""
-    if fm.get("author_handle"):
-        return fm["author_handle"]
-    for key in ("author_url", "tweet_url", "post_url"):
-        match = HANDLE_RE.search(fm.get(key, ""))
-        if match:
-            return match.group(1)
-    return ""
-
-
 def source_hash(body: str) -> str:
     """Stable SHA-256 of the source body (whitespace-normalised tail)."""
     return hashlib.sha256(body.strip().encode("utf-8")).hexdigest()
 
 
-def extract_tweet_text(body: str) -> str:
-    """Strip render boilerplate to recover the substantive tweet/post text.
-
-    Drops the rendered ``# Tweet by`` heading, ``**Author:**``/``**Tweet:**``
-    metadata lines, ``---`` rules, the ``## Attachments`` trailer, and inline
-    URLs so the result is the human-authored content used for slugs and hashes.
-    """
-    lines: list[str] = []
-    for line in body.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped == "---":
-            continue
-        if stripped.startswith("## Attachments"):
-            break
-        if stripped.startswith(BOILERPLATE_PREFIXES):
-            continue
-        lines.append(stripped)
-    text = " ".join(lines)
-    text = re.sub(r"https?://\S+", "", text)
-    text = re.sub(r"pic\.twitter\.com/\S+", "", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def wiki_source_slug(tweet_id: str, author: str, body: str) -> str:
-    """Derive the wiki source page filename for a tweet.
+def wiki_source_slug(source_id: str, author: str, body: str) -> str:
+    """Derive the wiki source page filename for a source.
 
     Readable-first scheme ``<author-slug>-<preview-slug>-<id6>.md``: the human
     author/topic leads so Obsidian's file explorer and graph nodes sort and read
-    by content, with the last 6 digits of the tweet ID appended as a
-    deterministic, collision-proof disambiguator. The full tweet ID stays in the
+    by content, with the last 6 characters of the source id appended as a
+    deterministic, collision-proof disambiguator. The full source id stays in the
     page's frontmatter and the manifest, so nothing is lost.
     """
     preview = re.sub(r"\s+", " ", body.strip())[:80]
-    id6 = tweet_id[-6:] if tweet_id else "tweet"
+    id6 = source_id[-6:] if source_id else "source"
     return f"{slugify(author, 24)}-{slugify(preview, 40)}-{id6}.md"
 
 
@@ -188,13 +129,18 @@ def save_json(path: Path, data: dict[str, Any]) -> None:
 # --------------------------------------------------------------------------- #
 # Classification
 # --------------------------------------------------------------------------- #
-def classify_domain(fm: dict[str, str], body: str, config: dict[str, Any]) -> str:
+def classify_domain(
+    fm: dict[str, str],
+    body: str,
+    config: dict[str, Any],
+    adapter: source_adapter.SourceAdapter,
+) -> str:
     """Pick the best-matching domain for a source via keyword/author scoring.
 
     Returns the configured ``unclassified`` bucket (default "review") when no
     domain shows any signal.
     """
-    handle = derive_handle(fm).lower()
+    handle = adapter.author_handle(fm).lower()
     haystack = f"{fm.get('author', '')} {body}".lower()
     domains: dict[str, dict[str, Any]] = config.get("domains", {})
 
@@ -239,37 +185,53 @@ def domain_vault(domain: str, config: dict[str, Any]) -> Path | None:
 # Plan computation
 # --------------------------------------------------------------------------- #
 def iter_source_files() -> list[Path]:
-    """All raw X source markdown files, sorted for deterministic output."""
-    raw_x = paths.raw_root() / "x"
-    return sorted(p for p in raw_x.rglob("*.md") if p.name != "README.md")
+    """All raw source markdown files, sorted for deterministic output.
+
+    Walks the whole ``raw/`` tree so every registered adapter's sources are
+    considered, skipping ``README.md`` and the ``assets/`` attachment store
+    (binaries and transcripts, never sources in their own right).
+    """
+    root = paths.raw_root()
+    files: list[Path] = []
+    for path in root.rglob("*.md"):
+        if path.name == "README.md":
+            continue
+        rel = path.relative_to(root)
+        if rel.parts and rel.parts[0] == "assets":
+            continue
+        files.append(path)
+    return sorted(files)
 
 
-def _canonical_rank(path: Path, tweet_id: str) -> tuple[int, str]:
+def _canonical_rank(path: Path, source_id: str) -> tuple[int, str]:
     """Lower ranks win: prefer the id-stamped export, then a stable path order."""
-    return (0 if path.name.startswith(tweet_id) else 1, str(path))
+    return (0 if path.name.startswith(source_id) else 1, str(path))
 
 
 def iter_canonical_source_files() -> list[Path]:
-    """One raw file per tweet_id.
+    """One raw file per ``source_id``.
 
-    The same tweet can land in multiple folders (e.g. a hand-named
-    ``clips-imported`` copy alongside the id-stamped ``likes`` export). Without
-    deduping, the planner processes both and the non-canonical copy shows up as
-    a phantom ``changed`` entry. This collapses to a single canonical file per
-    tweet_id, preferring the id-stamped filename. Files without a derivable
-    tweet_id are passed through so the caller can still log them.
+    The same source can land in multiple folders (e.g. a hand-named copy
+    alongside the id-stamped export). Without deduping, the planner processes
+    both and the non-canonical copy shows up as a phantom ``changed`` entry.
+    This collapses to a single canonical file per ``source_id``, preferring the
+    id-stamped filename. Files without a derivable id are passed through so the
+    caller can still log them.
     """
     chosen: dict[str, Path] = {}
     extras: list[Path] = []
     for path in iter_source_files():
         fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
-        tweet_id = derive_tweet_id(fm, path)
-        if not tweet_id:
+        adapter = source_adapter.adapter_for(path, fm)
+        source_id = adapter.source_id(fm, path)
+        if not source_id:
             extras.append(path)
             continue
-        current = chosen.get(tweet_id)
-        if current is None or _canonical_rank(path, tweet_id) < _canonical_rank(current, tweet_id):
-            chosen[tweet_id] = path
+        current = chosen.get(source_id)
+        if current is None or _canonical_rank(path, source_id) < _canonical_rank(
+            current, source_id
+        ):
+            chosen[source_id] = path
     return sorted(chosen.values()) + extras
 
 
@@ -312,27 +274,30 @@ def compute_plan(
     for path in iter_canonical_source_files():
         text = path.read_text(encoding="utf-8")
         fm, body = parse_frontmatter(text)
-        tweet_id = derive_tweet_id(fm, path)
-        if not tweet_id:
-            logger.warning("Skipping (no tweet_id): %s", path)
+        adapter = source_adapter.adapter_for(path, fm)
+        source_id = adapter.source_id(fm, path)
+        if not source_id:
+            logger.warning("Skipping (no source_id): %s", path)
             continue
 
-        clean = extract_tweet_text(body)
+        clean = adapter.clean_body(fm, body)
         body_hash = source_hash(clean)
-        entry = sources.get(tweet_id)
-        domain = entry.get("domain") if entry else classify_domain(fm, clean, config)
+        entry = sources.get(source_id)
+        domain = entry.get("domain") if entry else classify_domain(fm, clean, config, adapter)
         enabled = domain_enabled(domain, config)
         rel = str(path.relative_to(paths.raw_root().parent))
-        slug = wiki_source_slug(tweet_id, fm.get("author", "unknown"), clean)
+        slug = wiki_source_slug(source_id, fm.get("author", "unknown"), clean)
+        flags = adapter.asset_flags(fm, text)
 
         record = {
-            "tweet_id": tweet_id,
+            "source_id": source_id,
+            "source_type": adapter.source_type_for(fm),
             "file": rel,
             "domain": domain,
             "hash": body_hash,
             "wiki_page": f"sources/{slug}",
             "author": fm.get("author", ""),
-            "has_video": "videos:" in text,
+            "has_video": flags["has_video"],
         }
 
         if domain_filter and domain != domain_filter:
@@ -372,20 +337,21 @@ def update_manifest(state: dict[str, Any], plan: dict[str, Any], config: dict[st
     written = 0
     for bucket in ("new", "parked"):
         for record in plan["buckets"][bucket]:
-            tid = record["tweet_id"]
-            existing = sources.get(tid)
+            sid = record["source_id"]
+            existing = sources.get(sid)
             if (
                 existing
                 and existing.get("status") in {"ingested", "noise"}
                 and existing.get("hash") == record["hash"]
             ):
                 continue
-            sources[tid] = {
+            sources[sid] = {
                 "file": record["file"],
                 "domain": record["domain"],
                 "hash": record["hash"],
                 "status": "pending" if bucket == "new" else "parked",
                 "wiki_page": record["wiki_page"],
+                "source_type": record["source_type"],
                 "has_video": record["has_video"],
             }
             written += 1
@@ -395,45 +361,90 @@ def update_manifest(state: dict[str, Any], plan: dict[str, Any], config: dict[st
 def mark_ingested(
     state: dict[str, Any],
     plan: dict[str, Any],
-    tweet_ids: list[str],
+    source_ids: list[str],
     config: dict[str, Any],
     *,
     require_page: bool = True,
 ) -> tuple[int, list[str]]:
     """Flip the given sources to status "ingested" in the manifest.
 
-    Looks each tweet up in the freshly computed plan to capture its current body
+    Looks each source up in the freshly computed plan to capture its current body
     hash, destination wiki page, and domain, verifies the vault page actually
     exists (unless ``require_page`` is False), then records it as ingested so the
     next plan run reports it up-to-date. This is the finalize step the agent runs
     after writing source pages, replacing ad-hoc manifest edits.
 
-    Returns ``(count_written, problems)`` where ``problems`` lists the tweet ids
+    Returns ``(count_written, problems)`` where ``problems`` lists the source ids
     that could not be marked and why.
     """
     records: dict[str, dict[str, Any]] = {}
     for bucket in plan["buckets"].values():
         for record in bucket:
-            records[record["tweet_id"]] = record
+            records[record["source_id"]] = record
 
     sources = state.setdefault("sources", {})
     written = 0
     problems: list[str] = []
-    for tid in tweet_ids:
-        record = records.get(tid)
+    for sid in source_ids:
+        record = records.get(sid)
         if record is None:
-            problems.append(f"{tid}: no raw source found")
+            problems.append(f"{sid}: no raw source found")
             continue
         page_name = Path(record["wiki_page"]).name
         if require_page and not vault_page_exists(record["domain"], page_name, config):
-            problems.append(f"{tid}: vault page missing ({record['wiki_page']})")
+            problems.append(f"{sid}: vault page missing ({record['wiki_page']})")
             continue
-        sources[tid] = {
+        sources[sid] = {
             "file": record["file"],
             "domain": record["domain"],
             "hash": record["hash"],
             "status": "ingested",
             "wiki_page": record["wiki_page"],
+            "source_type": record["source_type"],
+            "has_video": record["has_video"],
+        }
+        written += 1
+    return written, problems
+
+
+def mark_noise(
+    state: dict[str, Any],
+    plan: dict[str, Any],
+    source_ids: list[str],
+) -> tuple[int, list[str]]:
+    """Flip the given sources to status "noise" so they never enter the worklist.
+
+    Records each source's current classification and body hash under status
+    "noise" in the manifest. Unlike ``mark_ingested`` this does not verify a
+    vault page, because a noise source is deliberately never written to the
+    wiki. ``compute_plan`` short-circuits any "noise" entry before the hash
+    comparison, so the exclusion is permanent even if the raw body later
+    changes. This is the sanctioned "not going to process" lever for backlog
+    items the agent should skip going forward.
+
+    Returns ``(count_written, problems)`` where ``problems`` lists the source ids
+    that could not be marked and why.
+    """
+    records: dict[str, dict[str, Any]] = {}
+    for bucket in plan["buckets"].values():
+        for record in bucket:
+            records[record["source_id"]] = record
+
+    sources = state.setdefault("sources", {})
+    written = 0
+    problems: list[str] = []
+    for sid in source_ids:
+        record = records.get(sid)
+        if record is None:
+            problems.append(f"{sid}: no raw source found")
+            continue
+        sources[sid] = {
+            "file": record["file"],
+            "domain": record["domain"],
+            "hash": record["hash"],
+            "status": "noise",
+            "wiki_page": record["wiki_page"],
+            "source_type": record["source_type"],
             "has_video": record["has_video"],
         }
         written += 1
@@ -483,13 +494,19 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mark-ingested",
         nargs="+",
-        metavar="TWEET_ID",
+        metavar="SOURCE_ID",
         help="Finalize the given sources as ingested (verifies the vault page exists first).",
     )
     parser.add_argument(
         "--allow-missing-page",
         action="store_true",
         help="With --mark-ingested, record the source even if its vault page is absent.",
+    )
+    parser.add_argument(
+        "--mark-noise",
+        nargs="+",
+        metavar="SOURCE_ID",
+        help='Permanently skip the given sources (status "noise"); never worklisted again.',
     )
     parser.add_argument(
         "--json", action="store_true", help="Emit only the worklist JSON on stdout."
@@ -521,7 +538,7 @@ def main() -> int:
     mark_problems: list[str] = []
     if args.mark_ingested:
         discovery = compute_plan(config, state, domain_filter=None, all_domains=True)
-        written, mark_problems = mark_ingested(
+        written, problems = mark_ingested(
             state,
             discovery,
             args.mark_ingested,
@@ -529,9 +546,19 @@ def main() -> int:
             require_page=not args.allow_missing_page,
         )
         save_json(args.state, state)
-        for problem in mark_problems:
+        for problem in problems:
             logger.warning("mark-ingested skipped %s", problem)
         logger.info("Marked ingested: %d source(s) in %s", written, args.state)
+        mark_problems.extend(problems)
+
+    if args.mark_noise:
+        discovery = compute_plan(config, state, domain_filter=None, all_domains=True)
+        written, problems = mark_noise(state, discovery, args.mark_noise)
+        save_json(args.state, state)
+        for problem in problems:
+            logger.warning("mark-noise skipped %s", problem)
+        logger.info("Marked noise: %d source(s) in %s", written, args.state)
+        mark_problems.extend(problems)
 
     plan = compute_plan(config, state, domain_filter=args.domain, all_domains=args.all_domains)
 

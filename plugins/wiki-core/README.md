@@ -35,6 +35,7 @@ Run any from the repo root with `uv run <entry-point>`.
 | Entry point | Purpose |
 |-------------|---------|
 | `wiki-plan` | Build the ingest worklist and update the source manifest |
+| `wiki-add` | Generic on-ramp — land a local file or web URL into `raw/inbox/` with uniform `source_type`/`source_id` frontmatter |
 | `wiki-pages` | Scaffold wiki pages, add index entries, append log entries |
 | `wiki-search` | Build the retrieval index, run hybrid search, find near-duplicates |
 | `wiki-verify` | Lint the wiki for structural and manifest defects |
@@ -100,5 +101,11 @@ The template in [templates/vault/](templates/vault/) carries the canonical layou
 ## Dependencies
 
 `bm25s`, `fastembed`, `mcp[cli]`, and `tqdm` — see [pyproject.toml](pyproject.toml). The wider [wiki-connector-x](../wiki-connector-x/) plugin depends on this package.
+
+## Source adapters
+
+The engine is content-type agnostic — nothing here hardwires any single source. The `SourceAdapter` contract in `wiki_core.source_adapter` defines how a raw file becomes planner/scaffolder input: identity (`source_id`/`source_type`), body cleaning, canonical URL, author handle, media flags, and the extra frontmatter or notices a page emits. The shipped `DefaultAdapter` handles generic `doc`/`web` content and owns the `raw/inbox/` drop that `wiki-add` writes.
+
+Connectors extend the engine by registering their own adapter under the `wiki_core.source_adapters` entry-point group. The core discovers them at runtime with `importlib.metadata.entry_points` and never imports connector code, so a new source type is a plugin that ships an adapter — no change to `wiki-core`. See [wiki-connector-x](../wiki-connector-x/) for a worked example.
 
 See the repository [AGENTS.md](../../AGENTS.md) for the full wiki operating schema and the quality gate.

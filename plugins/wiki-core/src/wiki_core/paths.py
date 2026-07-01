@@ -145,6 +145,17 @@ def raw_root() -> Path:
     return _env_path("WIKI_RAW") or (default_vault().parent / "raw")
 
 
+def inbox_root() -> Path:
+    """Resolve the drop folder for connector-less local/URL sources.
+
+    The ``wiki-add`` command writes generic web/document sources here as
+    ``raw/inbox/<slug>.md``. The default ``DefaultAdapter`` claims this subtree,
+    so anything landed in it is planned and scaffolded without a dedicated
+    connector.
+    """
+    return raw_root() / "inbox"
+
+
 def index_dir() -> Path:
     """Resolve the retrieval index home (non-raising).
 

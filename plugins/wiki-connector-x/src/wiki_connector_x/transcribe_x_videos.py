@@ -153,6 +153,21 @@ def patch_source(src: Path, idx: int, stream: str, transcript_rel: str) -> None:
     src.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
+def reconcile_frontmatter(src: Path, idx: int, stream: str, transcript_rel: str) -> bool:
+    """Patch the frontmatter transcript: line when the transcript file already exists.
+
+    build_worklist only surfaces videos whose frontmatter lacks a transcript: line,
+    but the processing loop skips when the transcript *file* is on disk. Those two
+    criteria can diverge (e.g. a git pull restores frontmatter while raw/assets
+    persists), stranding the source in the worklist forever. Calling this on the
+    file-exists path re-patches the frontmatter (idempotently) so the source drops
+    out of the worklist. Returns True if a change was written.
+    """
+    before = src.read_text(encoding="utf-8")
+    patch_source(src, idx, stream, transcript_rel)
+    return src.read_text(encoding="utf-8") != before
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true", help="list worklist, write nothing")
@@ -183,12 +198,17 @@ def main() -> int:
     model = WhisperModel(args.model, device="cpu", compute_type="int8")
 
     done = 0
+    reconciled = 0
     for item in worklist:
         tid, idx, stream, src = item["tweet_id"], item["idx"], item["stream"], item["file"]
         transcript_path = tweet_asset_dir(tid) / f"video-{idx}-transcript.txt"
         transcript_rel = str(transcript_path.relative_to(paths.raw_root().parent))
         if transcript_path.exists() and transcript_path.stat().st_size > 0 and not args.force:
-            print(f"skip {tid} v{idx} (transcript exists)")
+            if reconcile_frontmatter(src, idx, stream, transcript_rel):
+                reconciled += 1
+                print(f"reconcile {tid} v{idx}: transcript file existed, patched frontmatter")
+            else:
+                print(f"skip {tid} v{idx} (transcript exists)")
             continue
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=True) as tmp:
             tmp_path = Path(tmp.name)
@@ -220,7 +240,7 @@ def main() -> int:
         done += 1
         print(f"  -> {transcript_rel} ({len(text)} chars, lang={info.language})")
 
-    print(f"\ntranscribed {done}/{len(worklist)} video(s).")
+    print(f"\ntranscribed {done}/{len(worklist)} video(s); reconciled {reconciled} frontmatter.")
     return 0
 
 

@@ -55,13 +55,17 @@ Reserved keys the wiki uses (lowercase, top-level):
 | `timestamp` | When the source was folded in | ISO date on source pages (replaces the old `ingested`). |
 | `tags` | Free-form labels | Optional; when present it must be a YAML list (e.g. `tags: []` or `tags: [agents, evals]`). |
 
-Producer extensions sit alongside the reserved keys (source pages add `tweet_id`/`author`/`domain`/`has_video` and the like, entity and concept pages add `name`/`entity_kind`/`domain`) — the deterministic scaffolder (`uv run wiki-pages scaffold`) emits them, and `uv run wiki-pages migrate-okf` rewrites pre-OKF pages in place. The roll-up artifacts — `index.md`, `log.md`, `overview.md`, `synthesis.md`, `pulse.md` — stay frontmatter-free.
+Every source page also carries two uniform, connector-agnostic identity keys: `source_type` (the discriminator naming the adapter kind — `x`, `web`, `doc`) and `source_id` (the stable identity value under one key, per-adapter: an X status id, a URL hash, a content hash). These replace the old X-only `tweet_id`; `source_type` is distinct from the OKF page-kind `type: source`.
+
+Producer extensions sit alongside the reserved keys (X source pages add `author`/`author_handle`/`has_video`/`video_transcribed`, entity and concept pages add `name`/`entity_kind`/`domain`) — the deterministic scaffolder (`uv run wiki-pages scaffold`) emits them via the per-source [adapter](#source-adapters), and `uv run wiki-pages migrate-okf` rewrites pre-OKF pages in place (renaming `tweet_id`→`source_id` and stamping `source_type: x`). The roll-up artifacts — `index.md`, `log.md`, `overview.md`, `synthesis.md`, `pulse.md` — stay frontmatter-free.
 
 ## Operations
 
 ### Ingest
 
 The user drops a source into `raw/` and asks you to process it.
+
+Sources reach `raw/` two ways. Connector plugins land their own content under a dedicated subtree (the X connector writes `raw/x/`); connector-less content — a local file or a web URL — comes in through the generic on-ramp `uv run wiki-add <path-or-url>`, which writes a `raw/inbox/` file with uniform `source_type`/`source_id` frontmatter. Either way, the engine dispatches per file to the matching [source adapter](#source-adapters), so the steps below are identical regardless of origin.
 
 1. Read the source and any `raw/assets/` it references.
 2. Discuss key takeaways with the user when useful — Karpathy prefers **one source at a time with the user involved**.
@@ -187,10 +191,16 @@ The wiki is markdown first; the engine is an accelerator, not a gate. Three tier
 
 The deterministic engine ships as two installable packages under `plugins/`, a uv workspace:
 
-- `plugins/wiki-core/` — the wiki engine (`wiki_core` package) and its skills. Console entry points: `wiki-plan` (ingest worklist + manifest), `wiki-pages` (scaffold/index-add/log-append), `wiki-search` (build/search/duplicates), `wiki-verify` (lint), and `wiki-mcp` (the `jarvis-vault` MCP server).
-- `plugins/wiki-connector-x/` — the X (Twitter) connector (`wiki_connector_x` package, depends on `wiki-core`) and its skills. Entry points: `x-fetch`, `x-import`, `x-refresh-streams`, `x-transcribe`.
+- `plugins/wiki-core/` — the wiki engine (`wiki_core` package) and its skills. Console entry points: `wiki-plan` (ingest worklist + manifest), `wiki-add` (generic on-ramp landing a file or URL into `raw/inbox/`), `wiki-pages` (scaffold/index-add/log-append), `wiki-search` (build/search/duplicates), `wiki-verify` (lint), and `wiki-mcp` (the `jarvis-vault` MCP server).
+- `plugins/wiki-connector-x/` — the X (Twitter) connector (`wiki_connector_x` package, depends on `wiki-core`) and its skills. Entry points: `x-fetch`, `x-import`, `x-refresh-streams`, `x-transcribe`. It registers an `XAdapter` under the `wiki_core.source_adapters` entry-point group (see [Source adapters](#source-adapters)).
 
 Run any of them with `uv run <entry-point>` from the repo root. Each plugin directory **is** its Python package, so the scripts ship with the plugin for consumers.
+
+### Source adapters
+
+The engine is content-type agnostic: nothing in `wiki-core` hardwires X/Twitter parsing. A small `SourceAdapter` contract (in `wiki_core.source_adapter`) defines how a raw file becomes planner and scaffolder input — identity (`source_id`/`source_type`), body cleaning, canonical URL, author handle, source label, media flags, and the extra frontmatter/notices a page emits. The core ships a working generic `DefaultAdapter` (`source_type` `doc`/`web`) that owns the `raw/inbox/` drop.
+
+Connectors register their own adapters through the `wiki_core.source_adapters` entry-point group; the core discovers them at runtime via `importlib.metadata.entry_points` and never imports a connector package. For each raw file the planner asks `source_adapter.adapter_for(path, fm)` for the first adapter that `owns` it, falling back to `DefaultAdapter`; the scaffolder resolves a page's adapter by its `source_type` via `adapter_by_type`. The X connector's `XAdapter` claims `raw/x/` (and any file whose frontmatter carries a `tweet_id` or `/status/<id>` URL) and supplies all the Twitter-shaped parsing that used to live in the core.
 
 Locations resolve from environment variables, with a vault-relative default so an installed consumer never depends on the repo layout:
 

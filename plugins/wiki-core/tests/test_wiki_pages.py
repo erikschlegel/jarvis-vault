@@ -17,14 +17,15 @@ import pytest
 from wiki_core import ingest_plan, wiki_pages
 
 
-def _record(tweet_id: str, **overrides: Any) -> dict[str, Any]:
-    """A plan record matching ``compute_plan``'s shape for one tweet."""
+def _record(source_id: str, *, source_type: str = "doc", **overrides: Any) -> dict[str, Any]:
+    """A plan record matching ``compute_plan``'s shape for one generic source."""
     record: dict[str, Any] = {
-        "tweet_id": tweet_id,
-        "file": f"raw/x/likes/{tweet_id}.md",
+        "source_id": source_id,
+        "source_type": source_type,
+        "file": f"raw/inbox/{source_id}.md",
         "domain": "ai-swe",
-        "hash": f"hash-{tweet_id}",
-        "wiki_page": f"sources/source-{tweet_id[-6:]}.md",
+        "hash": f"hash-{source_id}",
+        "wiki_page": f"sources/source-{source_id[-6:]}.md",
         "author": "Some One",
         "has_video": False,
     }
@@ -32,12 +33,9 @@ def _record(tweet_id: str, **overrides: Any) -> dict[str, Any]:
     return record
 
 
-def _raw(body: str, *, handle: str = "someone", videos: bool = False) -> str:
-    """A minimal raw X source markdown with frontmatter."""
-    lines = ["---", "author: Some One", f"author_handle: {handle}"]
-    if videos:
-        lines += ["videos:", "  - page: https://x.com/x/status/1/video/1", "    transcript: t.txt"]
-    lines += ["---", "", body, ""]
+def _raw(body: str, *, resource: str = "https://example.com/post") -> str:
+    """A minimal generic (doc) raw source markdown with frontmatter."""
+    lines = ["---", "author: Some One", f"resource: {resource}", "---", "", body, ""]
     return "\n".join(lines)
 
 
@@ -45,43 +43,36 @@ def _raw(body: str, *, handle: str = "someone", videos: bool = False) -> str:
 # build_scaffold
 # --------------------------------------------------------------------------- #
 def test_build_scaffold_has_frontmatter_quote_and_stubs() -> None:
-    record = _record("123456")
-    page = wiki_pages.build_scaffold(record, _raw("Hello world tweet."), ingested_date="2026-06-29")
+    record = _record("abc123")
+    page = wiki_pages.build_scaffold(record, _raw("Hello world doc."), ingested_date="2026-06-29")
 
-    assert 'tweet_id: "123456"' in page
-    assert "author_handle: someone" in page
+    assert 'source_id: "abc123"' in page
+    assert "source_type: doc" in page
     assert "domain: ai-swe" in page
-    assert "raw: raw/x/likes/123456.md" in page
+    assert "raw: raw/inbox/abc123.md" in page
     # OKF reserved frontmatter: type/title/resource/timestamp/tags.
     assert "type: source" in page
     assert f'title: "{wiki_pages.TITLE_PLACEHOLDER}"' in page
-    assert "resource: https://x.com/someone/status/123456" in page
+    assert "resource: https://example.com/post" in page
     assert "timestamp: 2026-06-29" in page
     assert "tags: []" in page
     # The legacy key names are gone.
     assert "source_url:" not in page
     assert "ingested:" not in page
-    assert "> Hello world tweet." in page
-    assert "**Source:** [@someone on X](https://x.com/someone/status/123456)" in page
+    assert "tweet_id:" not in page
+    assert "> Hello world doc." in page
+    assert "**Source:** [Some One](https://example.com/post)" in page
     assert wiki_pages.SCAFFOLD_SENTINEL in page
     assert "## Summary" in page and "## Entities" in page and "## Concepts" in page
 
 
-def test_build_scaffold_flags_untranscribed_video() -> None:
-    record = _record("999000", has_video=True)
-    page = wiki_pages.build_scaffold(record, _raw("clip"), ingested_date="2026-06-29")
+def test_build_scaffold_without_resource_omits_link() -> None:
+    record = _record("nourl0")
+    raw = "\n".join(["---", "author: Some One", "---", "", "Body only.", ""])
+    page = wiki_pages.build_scaffold(record, raw, ingested_date="2026-06-29")
 
-    assert "has_video: true" in page
-    assert "video_transcribed: false" in page
-    assert "not yet transcribed" in page
-
-
-def test_build_scaffold_marks_transcribed_video_without_warning() -> None:
-    record = _record("999001", has_video=True)
-    page = wiki_pages.build_scaffold(record, _raw("clip", videos=True), ingested_date="2026-06-29")
-
-    assert "video_transcribed: true" in page
-    assert "not yet transcribed" not in page
+    assert "**Source:** Some One\n" in page
+    assert "**Source:** [Some One]" not in page
 
 
 # --------------------------------------------------------------------------- #
@@ -282,6 +273,10 @@ def test_migrate_source_renames_and_adds_okf_keys() -> None:
     assert "timestamp: 2026-06-29" in migrated
     assert "source_url:" not in migrated
     assert "ingested:" not in migrated
+    # Legacy tweet_id is renamed to the uniform source_id key and stamped x.
+    assert 'source_id: "111"' in migrated
+    assert "tweet_id:" not in migrated
+    assert "source_type: x" in migrated
     # `title` is derived from the H1 and inserted after `type:`.
     assert 'title: "A crafted headline"' in migrated
     assert "tags: []" in migrated

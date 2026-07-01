@@ -54,19 +54,14 @@ jobs:
       - name: Set up Python
         run: uv python install
 
-      - name: Install pip-audit
-        run: uv tool install pip-audit
-
       - name: Audit dependencies
-        run: uv run pip-audit --requirement <(uv export --no-dev --format requirements-txt 2>/dev/null || echo "") 2>&1 || true
+        run: uvx pip-audit --requirement <(uv export --no-dev --format requirements-txt 2>/dev/null || echo "") 2>&1 || true
 
       - name: Run Bandit (SAST)
-        run: |
-          uv tool install bandit
-          uv run bandit -r plugins/ -ll -f sarif -o bandit-results.sarif || true
+        run: uvx bandit -r plugins/ -ll -f sarif -o bandit-results.sarif || true
 
       - name: Upload Bandit SARIF
-        if: always()
+        if: always() && hashFiles('bandit-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: bandit-results.sarif

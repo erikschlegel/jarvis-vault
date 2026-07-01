@@ -108,11 +108,12 @@ def collect_md_files(wiki_root: Path) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--vault", type=Path, default=paths.default_vault())
-    parser.add_argument("--manifest", type=Path, default=paths.state_path())
+    parser.add_argument("--vault", type=Path, default=None)
+    parser.add_argument("--manifest", type=Path, default=None)
     args = parser.parse_args()
 
-    wiki_root: Path = args.vault
+    wiki_root: Path = args.vault if args.vault is not None else paths.default_vault()
+    manifest_path: Path = args.manifest if args.manifest is not None else paths.state_path()
     if not wiki_root.is_dir():
         print(f"ERROR: vault wiki root not found: {wiki_root}", file=sys.stderr)
         return 2
@@ -191,8 +192,8 @@ def main() -> int:
     # Reverse drift: source pages on disk not finalized as ingested in the manifest.
     drift: list[str] = []
     unfinalized: list[str] = []
-    if args.manifest.exists():
-        manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         sources_meta = manifest.get("sources", {})
         for tid, meta in sources_meta.items():
             if meta.get("status") != "ingested":

@@ -36,18 +36,24 @@ from pathlib import Path
 _DOTENV_NAME = ".env"
 
 
+def _xdg_dir(env_var: str, home_default: str) -> Path:
+    """A per-user ``jarvis-vault`` directory under an XDG base dir.
+
+    Uses ``$env_var`` when set, else ``~/home_default`` (e.g. ``~/.config``).
+    """
+    xdg = os.environ.get(env_var)
+    base = Path(xdg).expanduser() if xdg else Path.home() / home_default
+    return base / "jarvis-vault"
+
+
 def _user_config_dir() -> Path:
     """User configuration directory for the engine (XDG, with a HOME fallback)."""
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
-    return base / "jarvis-vault"
+    return _xdg_dir("XDG_CONFIG_HOME", ".config")
 
 
 def _user_cache_dir() -> Path:
     """User cache directory for derived, rebuildable state (XDG, HOME fallback)."""
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
-    return base / "jarvis-vault"
+    return _xdg_dir("XDG_CACHE_HOME", ".cache")
 
 
 def _candidate_dotenv_paths() -> list[Path]:

@@ -37,6 +37,7 @@ import json
 import logging
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -47,9 +48,10 @@ EXIT_FAILURE = 1
 EXIT_ERROR = 2
 
 # These paths anchor on the vault (WIKI_VAULT), so they are resolved lazily at
-# call time rather than import time: raw_root() intentionally raises SystemExit
-# with setup guidance when WIKI_VAULT is unset, and evaluating that at module
-# import would break simply importing the module (e.g. during test collection).
+# call time rather than import time. raw_root() is non-raising -- it falls back to
+# a user cache dir when WIKI_VAULT is unset -- so importing this module stays
+# side-effect free (e.g. during test collection); flows that genuinely require a
+# configured vault still fail loudly through default_vault() at call time.
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
 
@@ -326,6 +328,61 @@ def compute_plan(
     return {"buckets": buckets, "worklist": worklist}
 
 
+def records_by_id(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Map source_id -> plan record across every bucket of a computed plan."""
+    records: dict[str, dict[str, Any]] = {}
+    for bucket in plan["buckets"].values():
+        for record in bucket:
+            records[record["source_id"]] = record
+    return records
+
+
+def _manifest_entry(record: dict[str, Any], status: str) -> dict[str, Any]:
+    """Build the manifest ``sources`` entry for a plan record at a given status."""
+    return {
+        "file": record["file"],
+        "domain": record["domain"],
+        "hash": record["hash"],
+        "status": status,
+        "wiki_page": record["wiki_page"],
+        "source_type": record["source_type"],
+        "has_video": record["has_video"],
+    }
+
+
+def _finalize(
+    state: dict[str, Any],
+    plan: dict[str, Any],
+    source_ids: list[str],
+    status: str,
+    *,
+    page_check: Callable[[str, dict[str, Any]], str | None] | None = None,
+) -> tuple[int, list[str]]:
+    """Flip ``source_ids`` to ``status`` in the manifest from the freshly computed plan.
+
+    Shared core of ``mark_ingested`` and ``mark_noise``. ``page_check`` is an
+    optional predicate returning a problem string (skips the source) or ``None``.
+    Returns ``(count_written, problems)``.
+    """
+    records = records_by_id(plan)
+    sources = state.setdefault("sources", {})
+    written = 0
+    problems: list[str] = []
+    for sid in source_ids:
+        record = records.get(sid)
+        if record is None:
+            problems.append(f"{sid}: no raw source found")
+            continue
+        if page_check is not None:
+            problem = page_check(sid, record)
+            if problem is not None:
+                problems.append(problem)
+                continue
+        sources[sid] = _manifest_entry(record, status)
+        written += 1
+    return written, problems
+
+
 def update_manifest(state: dict[str, Any], plan: dict[str, Any], config: dict[str, Any]) -> int:
     """Persist proposed classification + hash for not-yet-finalized sources.
 
@@ -345,15 +402,7 @@ def update_manifest(state: dict[str, Any], plan: dict[str, Any], config: dict[st
                 and existing.get("hash") == record["hash"]
             ):
                 continue
-            sources[sid] = {
-                "file": record["file"],
-                "domain": record["domain"],
-                "hash": record["hash"],
-                "status": "pending" if bucket == "new" else "parked",
-                "wiki_page": record["wiki_page"],
-                "source_type": record["source_type"],
-                "has_video": record["has_video"],
-            }
+            sources[sid] = _manifest_entry(record, "pending" if bucket == "new" else "parked")
             written += 1
     return written
 
@@ -377,34 +426,16 @@ def mark_ingested(
     Returns ``(count_written, problems)`` where ``problems`` lists the source ids
     that could not be marked and why.
     """
-    records: dict[str, dict[str, Any]] = {}
-    for bucket in plan["buckets"].values():
-        for record in bucket:
-            records[record["source_id"]] = record
 
-    sources = state.setdefault("sources", {})
-    written = 0
-    problems: list[str] = []
-    for sid in source_ids:
-        record = records.get(sid)
-        if record is None:
-            problems.append(f"{sid}: no raw source found")
-            continue
+    def page_check(sid: str, record: dict[str, Any]) -> str | None:
+        if not require_page:
+            return None
         page_name = Path(record["wiki_page"]).name
-        if require_page and not vault_page_exists(record["domain"], page_name, config):
-            problems.append(f"{sid}: vault page missing ({record['wiki_page']})")
-            continue
-        sources[sid] = {
-            "file": record["file"],
-            "domain": record["domain"],
-            "hash": record["hash"],
-            "status": "ingested",
-            "wiki_page": record["wiki_page"],
-            "source_type": record["source_type"],
-            "has_video": record["has_video"],
-        }
-        written += 1
-    return written, problems
+        if not vault_page_exists(record["domain"], page_name, config):
+            return f"{sid}: vault page missing ({record['wiki_page']})"
+        return None
+
+    return _finalize(state, plan, source_ids, "ingested", page_check=page_check)
 
 
 def mark_noise(
@@ -425,30 +456,7 @@ def mark_noise(
     Returns ``(count_written, problems)`` where ``problems`` lists the source ids
     that could not be marked and why.
     """
-    records: dict[str, dict[str, Any]] = {}
-    for bucket in plan["buckets"].values():
-        for record in bucket:
-            records[record["source_id"]] = record
-
-    sources = state.setdefault("sources", {})
-    written = 0
-    problems: list[str] = []
-    for sid in source_ids:
-        record = records.get(sid)
-        if record is None:
-            problems.append(f"{sid}: no raw source found")
-            continue
-        sources[sid] = {
-            "file": record["file"],
-            "domain": record["domain"],
-            "hash": record["hash"],
-            "status": "noise",
-            "wiki_page": record["wiki_page"],
-            "source_type": record["source_type"],
-            "has_video": record["has_video"],
-        }
-        written += 1
-    return written, problems
+    return _finalize(state, plan, source_ids, "noise")
 
 
 def print_summary(plan: dict[str, Any], config: dict[str, Any]) -> None:

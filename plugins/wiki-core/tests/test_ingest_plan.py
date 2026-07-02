@@ -15,22 +15,23 @@ import pytest
 from wiki_core import ingest_plan
 
 
-def _record(tweet_id: str) -> dict[str, Any]:
-    """Build a plan record matching ``compute_plan``'s shape for one tweet."""
+def _record(source_id: str) -> dict[str, Any]:
+    """Build a plan record matching ``compute_plan``'s shape for one source."""
     return {
-        "tweet_id": tweet_id,
-        "file": f"raw/x/likes/{tweet_id}.md",
+        "source_id": source_id,
+        "source_type": "x",
+        "file": f"raw/x/likes/{source_id}.md",
         "domain": "ai-swe",
-        "hash": f"hash-{tweet_id}",
-        "wiki_page": f"sources/source-{tweet_id[-6:]}.md",
+        "hash": f"hash-{source_id}",
+        "wiki_page": f"sources/source-{source_id[-6:]}.md",
         "author": "someone",
         "has_video": False,
     }
 
 
-def _plan(*tweet_ids: str) -> dict[str, Any]:
+def _plan(*source_ids: str) -> dict[str, Any]:
     """Wrap records in the bucket structure ``mark_ingested`` reads."""
-    return {"buckets": {"pending": [_record(tid) for tid in tweet_ids]}}
+    return {"buckets": {"pending": [_record(sid) for sid in source_ids]}}
 
 
 def test_mark_ingested_finalizes_pending_source(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -76,6 +77,29 @@ def test_mark_ingested_reports_unknown_tweet() -> None:
     state: dict[str, Any] = {"sources": {}}
 
     written, problems = ingest_plan.mark_ingested(state, _plan("444"), ["999"], {})
+
+    assert written == 0
+    assert problems == ["999: no raw source found"]
+    assert state["sources"] == {}
+
+
+def test_mark_noise_excludes_source_without_page_check() -> None:
+    state: dict[str, Any] = {"sources": {"555": {"status": "pending", "hash": "stale"}}}
+
+    written, problems = ingest_plan.mark_noise(state, _plan("555"), ["555"])
+
+    assert written == 1
+    assert problems == []
+    entry = state["sources"]["555"]
+    assert entry["status"] == "noise"
+    assert entry["hash"] == "hash-555"
+    assert entry["wiki_page"] == "sources/source-555.md"
+
+
+def test_mark_noise_reports_unknown_tweet() -> None:
+    state: dict[str, Any] = {"sources": {}}
+
+    written, problems = ingest_plan.mark_noise(state, _plan("777"), ["999"])
 
     assert written == 0
     assert problems == ["999: no raw source found"]

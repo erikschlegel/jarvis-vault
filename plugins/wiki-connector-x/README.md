@@ -69,6 +69,10 @@ Complete the [wiki-core setup](../wiki-core/README.md#setup) first — `uv sync`
 
 Once sources land in `raw/x/`, fold them into the wiki with the wiki-core [wiki-ingest](../wiki-core/skills/wiki-ingest/SKILL.md) skill.
 
+## Source adapter
+
+This connector registers an `XAdapter` (in `wiki_connector_x.adapter`) under the `wiki_core.source_adapters` entry-point group, so `wiki-core` discovers it at runtime without importing this package. The adapter claims `raw/x/` — plus any raw file whose frontmatter carries a `tweet_id` or a `/status/<id>` URL — and supplies all the Twitter-shaped parsing: deriving the tweet-status `source_id`, extracting the author handle, stripping tweet boilerplate from the body, synthesizing the canonical `x.com/.../status/<id>` URL, flagging embedded video, and emitting the X-specific page frontmatter (`author`, `author_handle`, `has_video`, `video_transcribed`) and the "video not yet transcribed" scaffold notice. Pages it produces carry `source_type: x`. This is the reference example for adding a new source type as a plugin — see the [Source adapters](../wiki-core/README.md#source-adapters) section in wiki-core.
+
 ## Configuration
 
 Inherits the same environment variables as `wiki-core` (`WIKI_VAULT`, `WIKI_INDEX_DIR`, `WIKI_STATE`, `WIKI_CONFIG`). X API credentials live in `.env` and OAuth tokens in `.secrets/` (both gitignored) — see the fetch walkthrough for setup.

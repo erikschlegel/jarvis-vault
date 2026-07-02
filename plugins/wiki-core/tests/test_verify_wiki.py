@@ -19,7 +19,8 @@ SOURCE_PAGE = """\
 ---
 type: source
 title: "A source about agents"
-tweet_id: "111"
+source_type: x
+source_id: "111"
 author: A
 author_handle: a
 domain: ai-swe

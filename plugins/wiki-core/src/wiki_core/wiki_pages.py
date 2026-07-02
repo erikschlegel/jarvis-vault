@@ -84,11 +84,7 @@ def resolve_vault(config: dict[str, Any], domain: str, vault_arg: Path | None) -
 def plan_records(config: dict[str, Any], state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Map source_id -> plan record across every bucket (all domains)."""
     plan = ingest_plan.compute_plan(config, state, domain_filter=None, all_domains=True)
-    records: dict[str, dict[str, Any]] = {}
-    for bucket in plan["buckets"].values():
-        for record in bucket:
-            records[record["source_id"]] = record
-    return records
+    return ingest_plan.records_by_id(plan)
 
 
 # --------------------------------------------------------------------------- #

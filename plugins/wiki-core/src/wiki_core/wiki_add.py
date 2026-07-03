@@ -1,19 +1,23 @@
-"""Land a connector-less local file or web URL into ``raw/inbox/`` for ingest.
+"""Land connector-less content into ``raw/inbox/`` for ingest.
 
-This is the generic on-ramp for content that has no dedicated connector: a
-local markdown/text file, or a web page fetched over HTTP. It writes a single
-``raw/inbox/<slug>-<date>.md`` file carrying the uniform identity frontmatter
-(``source_type`` + ``source_id``) plus ``resource``/``title`` so the engine's
-``DefaultAdapter`` (which owns ``raw/inbox/``) can plan and scaffold it exactly
-like any other source. It never touches the wiki vault directly.
+This is the generic on-ramp for content that has no dedicated connector. It
+writes a single ``raw/inbox/<slug>-<date>.md`` file carrying the uniform identity
+frontmatter (``source_type`` + ``source_id``) plus ``resource``/``title`` so the
+engine's ``DefaultAdapter`` (which owns ``raw/inbox/``) can plan and scaffold it
+exactly like any other source. It never touches the wiki vault directly.
 
-Two source kinds are auto-detected from the argument:
-  * an ``http(s)://`` URL           -> ``source_type: web`` (page is fetched)
-  * anything else (an existing path) -> ``source_type: doc``
+Three input shapes are supported:
+  * an ``http(s)://`` URL             -> ``source_type: web`` (page is fetched)
+  * an existing local file path       -> ``source_type: doc`` (file is read)
+  * literal content (``--stdin`` /     -> ``source_type: doc`` (body is the source;
+    ``--text``) with no path/URL          identity is a content hash)
+
+The content shapes exist because a chat attachment or a pasted/typed note arrives
+as text, not as a readable path — the ingest skill pipes that body straight in.
 
 The fetch is intentionally dependency-free (``urllib`` + a crude tag strip);
 callers wanting rich extraction can pre-convert to text/markdown and pass the
-file path instead.
+file path or piped body instead.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ import urllib.parse
 import urllib.request
 from datetime import date
 from pathlib import Path
+from typing import NamedTuple
 
 from wiki_core import ingest_plan, paths
 
@@ -41,7 +46,16 @@ EXIT_FAILURE = 1
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
 _TAG_RE = re.compile(r"<[^>]+>")
+_H1_RE = re.compile(r"^\s*#\s+(.*\S)\s*$", re.MULTILINE)
+_MAX_DERIVED_TITLE = 120
 _USER_AGENT = "jarvis-vault/wiki-add (+https://github.com/)"
+
+
+class LandedSource(NamedTuple):
+    """The result of landing a source into the inbox: its path and stable identity."""
+
+    path: Path
+    source_id: str
 
 
 def today_iso() -> str:
@@ -68,6 +82,23 @@ def _extract_title(raw: str) -> str:
     if not match:
         return ""
     return re.sub(r"\s+", " ", html.unescape(match.group(1))).strip()
+
+
+def derive_title(body: str) -> str:
+    """A headline for a bare content body: first markdown H1, else first text line.
+
+    Used when landing piped/pasted content (``--stdin``/``--text``) without an
+    explicit ``--title``. Returns an empty string only when the body has no
+    non-blank line; callers substitute a fallback in that case.
+    """
+    match = _H1_RE.search(body)
+    if match:
+        return match.group(1).strip()[:_MAX_DERIVED_TITLE]
+    for line in body.splitlines():
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            return stripped[:_MAX_DERIVED_TITLE]
+    return ""
 
 
 def fetch_url(url: str) -> tuple[str, str]:
@@ -132,14 +163,43 @@ def render_inbox_md(
     return "\n".join(fm) + "\n\n" + body.strip() + "\n"
 
 
+def _land(
+    *,
+    source_type: str,
+    resource: str,
+    title: str,
+    body: str,
+    imported_at: str,
+    inbox: Path,
+    stem: str,
+) -> LandedSource:
+    """Compute identity, render, and write one inbox file; return path + source_id."""
+    sid = source_id_for(source_type=source_type, resource=resource, body=body, stem=stem)
+    slug = ingest_plan.slugify(title, 50) or "source"
+    inbox.mkdir(parents=True, exist_ok=True)
+    dest = inbox / f"{slug}-{imported_at}-{sid[:6]}.md"
+    dest.write_text(
+        render_inbox_md(
+            source_type=source_type,
+            source_id=sid,
+            resource=resource,
+            title=title,
+            imported_at=imported_at,
+            body=body,
+        ),
+        encoding="utf-8",
+    )
+    return LandedSource(path=dest, source_id=sid)
+
+
 def add_source(
     source: str,
     *,
     title: str | None,
     imported_at: str,
     inbox: Path,
-) -> Path:
-    """Fetch/read ``source`` and write it into ``inbox``; return the new path."""
+) -> LandedSource:
+    """Fetch/read a path or URL and write it into ``inbox``; return path + source_id."""
     if is_url(source):
         source_type = "web"
         resource = source
@@ -154,27 +214,43 @@ def add_source(
         body = path.read_text(encoding="utf-8")
         effective_title = title or path.stem
 
-    sid = source_id_for(
+    return _land(
         source_type=source_type,
         resource=resource,
+        title=effective_title,
         body=body,
+        imported_at=imported_at,
+        inbox=inbox,
         stem=Path(source).stem,
     )
-    slug = ingest_plan.slugify(effective_title, 50) or "source"
-    inbox.mkdir(parents=True, exist_ok=True)
-    dest = inbox / f"{slug}-{imported_at}-{sid[:6]}.md"
-    dest.write_text(
-        render_inbox_md(
-            source_type=source_type,
-            source_id=sid,
-            resource=resource,
-            title=effective_title,
-            imported_at=imported_at,
-            body=body,
-        ),
-        encoding="utf-8",
+
+
+def add_text(
+    body: str,
+    *,
+    title: str | None,
+    imported_at: str,
+    inbox: Path,
+) -> LandedSource:
+    """Land a literal content body (chat attachment / pasted note) into ``inbox``.
+
+    Unlike ``add_source`` there is no path or URL — the body *is* the source. The
+    identity is a content hash, the ``source_type`` is ``doc``, and ``resource``
+    is left empty (the scaffolder falls back to the raw file path for the vault
+    page). The title is the given ``title``, else one derived from the body.
+    """
+    if not body.strip():
+        raise ValueError("refusing to land empty content")
+    effective_title = title or derive_title(body) or "untitled note"
+    return _land(
+        source_type="doc",
+        resource="",
+        title=effective_title,
+        body=body,
+        imported_at=imported_at,
+        inbox=inbox,
+        stem="",
     )
-    return dest
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -182,7 +258,20 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("source", help="A local file path or an http(s):// URL.")
+    parser.add_argument(
+        "source",
+        nargs="?",
+        help="A local file path or an http(s):// URL. Omit when using --stdin/--text.",
+    )
+    parser.add_argument(
+        "--text",
+        help="Land this literal text as a source (for content with no path, e.g. a pasted note).",
+    )
+    parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read the source body from stdin (for piped content with no path).",
+    )
     parser.add_argument("--title", help="Override the derived title.")
     parser.add_argument("--date", help="imported_at date (default: today).")
     parser.add_argument(
@@ -202,19 +291,27 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(message)s",
     )
+    # Exactly one input shape: a positional path/URL, --text, or --stdin.
+    shapes_given = sum([args.source is not None, args.text is not None, bool(args.stdin)])
+    if shapes_given != 1:
+        logger.error("wiki-add: provide exactly one of a path/URL, --text, or --stdin")
+        return EXIT_FAILURE
+
     inbox = args.inbox or paths.inbox_root()
     imported_at = args.date or today_iso()
     try:
-        dest = add_source(
-            args.source,
-            title=args.title,
-            imported_at=imported_at,
-            inbox=inbox,
-        )
-    except (FileNotFoundError, urllib.error.URLError, OSError) as exc:
+        if args.stdin:
+            result = add_text(
+                sys.stdin.read(), title=args.title, imported_at=imported_at, inbox=inbox
+            )
+        elif args.text is not None:
+            result = add_text(args.text, title=args.title, imported_at=imported_at, inbox=inbox)
+        else:
+            result = add_source(args.source, title=args.title, imported_at=imported_at, inbox=inbox)
+    except (FileNotFoundError, urllib.error.URLError, ValueError, OSError) as exc:
         logger.error("wiki-add: %s", exc)
         return EXIT_FAILURE
-    logger.info("wiki-add: wrote %s", dest)
+    logger.info("wiki-add: wrote %s (source_id %s)", result.path, result.source_id)
     return EXIT_SUCCESS
 
 

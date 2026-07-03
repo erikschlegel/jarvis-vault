@@ -15,15 +15,26 @@ This skill runs the **Ingest** operation defined in [AGENTS.md](../../../../AGEN
 
 The wiki lives in an Obsidian vault outside the workspace (its location resolves from `WIKI_VAULT`). Source files live in the workspace under `raw/`; wiki pages are written to the vault. Karpathy's rule holds: process **one source at a time, with the user involved**. Never modify `raw/` during ingest — sources are immutable inputs.
 
-Ingest is source-type agnostic. Content reaches `raw/` two ways: connector plugins land their own content under a dedicated subtree (the X connector writes `raw/x/`), and connector-less content — a local file or a web URL — comes in through the generic on-ramp `uv run wiki-add <path-or-url>`, which writes a `raw/inbox/` file with uniform `source_type`/`source_id` frontmatter. The engine dispatches each raw file to the matching source adapter (the generic `DefaultAdapter` handles `raw/inbox/` `doc`/`web` content; the X connector's adapter handles `raw/x/`), so the write protocol below is identical regardless of where a source came from.
+Ingest is source-type agnostic. Content reaches `raw/` two ways: connector plugins land their own content under a dedicated subtree (the X connector writes `raw/x/`), and connector-less content — a local file, a web URL, or a piped text block (a chat attachment or pasted note) — comes in through the generic on-ramp `uv run wiki-add` (`<path-or-url>`, or `--stdin`/`--text` for content with no readable path), which writes a `raw/inbox/` file with uniform `source_type`/`source_id` frontmatter. The engine dispatches each raw file to the matching source adapter (the generic `DefaultAdapter` handles `raw/inbox/` `doc`/`web` content; the X connector's adapter handles `raw/x/`), so the write protocol below is identical regardless of where a source came from.
 
 When you are running as a GUI or desktop client (for example, the GitHub Copilot desktop app) and the `jarvis-vault` server is available, prefer its MCP read tools (`get_pulse`, `search_wiki`, `read_page`) for the orientation and lookup steps — checking the pulse and finding existing entity or concept pages to update — rather than shelling out; page writes, index/log helpers, and manifest updates still go through the Tier 1 CLI and file tools.
 
 ## When to ingest
 
 - The user added a file under `raw/` — X clips under `raw/x/{bookmarks,likes,clips-imported}/*.md`, or a generic file or web clip under `raw/inbox/*.md` (typically landed with `uv run wiki-add`) — and wants it folded into the wiki.
+- The user names a local path or a URL, or attaches a file or pastes a text block in chat, for you to land and fold in (see [Landing the source](#landing-the-source)).
 - The user asks what is pending ingest, or to compile the backlog into the vault.
 - A source already ingested changed upstream and needs a refresh.
+
+## Landing the source
+
+Before computing the worklist, make sure the source actually exists under `raw/`. Classify the ingest argument:
+
+- **An existing source** — a `source_id`, or a file already under `raw/` (an X clip, or a prior `raw/inbox/` drop). Nothing to land; go straight to the worklist.
+- **A local file path or an `http(s)://` URL** — land it with `uv run wiki-add <path-or-url>`. This writes one `raw/inbox/` file with the uniform `source_type`/`source_id` frontmatter.
+- **An attached file or a pasted/typed text block** — this arrives as *content*, not a readable path (a chat attachment or paste has no stable path, and an out-of-workspace temp path may be unreadable). Pipe the in-context body to `uv run wiki-add --stdin --title "<crafted headline>"`. Supply a specific `--title`; ask the user for one only when the body yields no sensible headline.
+
+`wiki-add` prints the landed `source_id`, and the next `uv run wiki-plan` lists it as `new`. Landing happens **before** the write protocol begins — never interleave it with vault writes, and never edit `raw/` afterward (it stays immutable during ingest).
 
 ## Worklist
 

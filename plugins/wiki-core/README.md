@@ -35,7 +35,7 @@ Run any from the repo root with `uv run <entry-point>`.
 | Entry point | Purpose |
 |-------------|---------|
 | `wiki-plan` | Build the ingest worklist and update the source manifest |
-| `wiki-add` | Generic on-ramp — land a local file or web URL into `raw/inbox/` with uniform `source_type`/`source_id` frontmatter |
+| `wiki-add` | Generic on-ramp — land a local file, web URL, or piped text (`--stdin`/`--text`) into `raw/inbox/` with uniform `source_type`/`source_id` frontmatter |
 | `wiki-pages` | Scaffold wiki pages, add index entries, append log entries |
 | `wiki-search` | Build the retrieval index, run hybrid search, find near-duplicates |
 | `wiki-verify` | Lint the wiki for structural and manifest defects |

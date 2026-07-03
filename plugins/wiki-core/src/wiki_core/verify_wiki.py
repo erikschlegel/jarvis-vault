@@ -88,6 +88,54 @@ def parse_frontmatter(text: str) -> dict[str, str]:
     return fm
 
 
+def _double_quoted_is_valid(value: str) -> bool:
+    """True when ``value`` is a well-formed YAML double-quoted scalar.
+
+    ``value`` is assumed to open with ``"``. A valid scalar closes with a single
+    unescaped ``"`` as its final character and backslash-escapes every interior
+    quote. Returns False for the two malformations a lenient line-parser accepts
+    but a real YAML reader (Obsidian, PyYAML) rejects: an unterminated string, or
+    an unescaped interior quote that closes the scalar early (e.g. ``"a "b""``).
+    """
+    i, n = 1, len(value)
+    while i < n:
+        char = value[i]
+        if char == "\\":
+            i += 2  # skip the escaped character
+            continue
+        if char == '"':
+            return i == n - 1  # closing quote must be the final character
+        i += 1
+    return False  # never closed
+
+
+def malformed_quoted_keys(text: str) -> list[str]:
+    """Top-level frontmatter keys whose double-quoted value is malformed.
+
+    Surfaces the corruption class that produced 27 broken source pages: a crafted
+    free-text value (e.g. a ``title:`` echoing an H1 that contains quotes) written
+    into ``key: "..."`` without escaping the interior quotes. The lenient
+    ``parse_frontmatter`` above silently accepts these, so they are checked here
+    against the stricter double-quoted-scalar contract.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return []
+    bad: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith((" ", "\t")):
+            continue  # nested mapping / list item
+        match = FRONTMATTER_KEY_RE.match(line)
+        if not match:
+            continue
+        key, value = match.group(1), match.group(2).strip()
+        if value.startswith('"') and not _double_quoted_is_valid(value):
+            bad.append(key)
+    return bad
+
+
 def slugify(heading: str) -> str:
     """Derive a GitHub/Obsidian-style anchor slug from heading or fragment text."""
     slug = heading.strip().lower()
@@ -190,6 +238,14 @@ def main() -> int:
         tags_val = fm.get("tags")
         if tags_val and not tags_val.startswith("["):
             frontmatter_violations.append(f"{rel(p)}: tags must be a list")
+        # Malformed double-quoted scalars (unterminated / unescaped interior
+        # quote) that the lenient line-parser above accepts but a real YAML
+        # reader rejects — the corruption class that broke 27 source titles.
+        for bad_key in malformed_quoted_keys(text_by_path[p]):
+            frontmatter_violations.append(
+                f"{rel(p)}: malformed quoted value for '{bad_key}' "
+                "(unterminated or unescaped interior quote)"
+            )
 
     # Manifest drift (forward): ingested sources whose wiki_page is missing on disk.
     # Reverse drift: source pages on disk not finalized as ingested in the manifest.

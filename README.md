@@ -91,7 +91,7 @@ The plugins also register slash-commands you invoke explicitly. In the Copilot C
 | Command | Plugin | What it does |
 |---------|--------|--------------|
 | `/wiki` | wiki-core | Orientation dashboard: runs `wiki-doctor`, shows the pulse, and lists the `wiki-plan` worklist |
-| `/ingest [source]` | wiki-core | Fold a `raw/` source into the wiki (no argument ingests the next worklist item) |
+| `/ingest [source]` | wiki-core | Fold a source into the wiki — accepts a `raw/` source, a path/URL, or an attachment/pasted text block (auto-landed); no argument ingests the next worklist item |
 | `/query <question>` | wiki-core | Answer a question against the wiki, with citations |
 | `/lint [domain]` | wiki-core | Health-check the wiki and fix issues with approval |
 | `/save [title]` | wiki-core | File the current durable answer into the vault's `comparisons/` |

@@ -25,6 +25,7 @@ Exit codes: 0 success, 1 failure, 2 configuration/argument error.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import re
 import sys
@@ -53,6 +54,17 @@ TITLE_PLACEHOLDER = "TITLE — replace with a crafted, specific headline"
 LINK_TARGET_RE = re.compile(r"\]\(([^)]+)\)")
 
 logger = logging.getLogger(__name__)
+
+
+def title_line(title: str) -> str:
+    """Render a frontmatter ``title:`` line as an escaped YAML double-quoted scalar.
+
+    ``json.dumps`` emits a valid subset of YAML double-quoted scalars, so a title
+    containing interior quotes or backslashes (e.g. an H1 like ``Boris Cherny:
+    "..."``) cannot break the frontmatter block. ``ensure_ascii=False`` keeps
+    em-dashes and other unicode literal to match the vault's house style.
+    """
+    return f"title: {json.dumps(title, ensure_ascii=False)}"
 
 
 # --------------------------------------------------------------------------- #
@@ -108,7 +120,7 @@ def build_scaffold(record: dict[str, Any], raw_text: str, *, ingested_date: str)
     fm_lines = [
         "---",
         "type: source",
-        f'title: "{TITLE_PLACEHOLDER}"',
+        title_line(TITLE_PLACEHOLDER),
         f"source_type: {source_type}",
         f'source_id: "{source_id}"',
         f"domain: {record['domain']}",
@@ -314,7 +326,7 @@ def migrate_source_text(text: str) -> tuple[str, bool]:
             if line.startswith("type:"):
                 insert_at = idx + 1
                 break
-        renamed.insert(insert_at, f'title: "{title}"')
+        renamed.insert(insert_at, title_line(title))
         changed = True
     # Stamp `source_type: x` after `source_id:` (existing pages are all X).
     if "source_type" not in keys:
@@ -345,7 +357,7 @@ def migrate_comparison_text(text: str) -> tuple[str, bool]:
     title = _first_h1(text) or TITLE_PLACEHOLDER
     split = _split_frontmatter(text)
     if split is None:
-        block = ["---", "type: comparison", f'title: "{title}"', "tags: []", "---", ""]
+        block = ["---", "type: comparison", title_line(title), "tags: []", "---", ""]
         trailing = "\n" if text.endswith("\n") else ""
         return "\n".join(block) + text.rstrip("\n") + trailing, True
 
@@ -357,7 +369,7 @@ def migrate_comparison_text(text: str) -> tuple[str, bool]:
         inner.insert(0, "type: comparison")
         changed = True
     if "title" not in keys:
-        inner.insert(1 if "type" not in keys else 0, f'title: "{title}"')
+        inner.insert(1 if "type" not in keys else 0, title_line(title))
         changed = True
     if "tags" not in keys:
         inner.append("tags: []")

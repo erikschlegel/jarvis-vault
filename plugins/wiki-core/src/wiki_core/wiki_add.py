@@ -154,9 +154,9 @@ def render_inbox_md(
     fm = [
         "---",
         f"source_type: {source_type}",
-        f"source_id: {json.dumps(source_id)}",
-        f"resource: {json.dumps(resource)}",
-        f"title: {json.dumps(title)}",
+        f"source_id: {json.dumps(source_id, ensure_ascii=False)}",
+        f"resource: {json.dumps(resource, ensure_ascii=False)}",
+        f"title: {json.dumps(title, ensure_ascii=False)}",
         f"imported_at: {imported_at}",
         "---",
     ]

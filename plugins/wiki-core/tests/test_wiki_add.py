@@ -70,6 +70,20 @@ def test_render_inbox_md_shape() -> None:
     assert md.rstrip().endswith("Body text.")
 
 
+def test_render_inbox_md_preserves_non_ascii() -> None:
+    md = wiki_add.render_inbox_md(
+        source_type="doc",
+        source_id="abc123",
+        resource="https://example.com/café",
+        title="Böckeler on harness engineering",
+        imported_at="2026-07-01",
+        body="Body text.",
+    )
+    assert 'title: "Böckeler on harness engineering"' in md
+    assert 'resource: "https://example.com/café"' in md
+    assert "\\u" not in md
+
+
 def test_add_source_local_file(tmp_path: Path) -> None:
     src = tmp_path / "note.md"
     src.write_text("Local note body.", encoding="utf-8")

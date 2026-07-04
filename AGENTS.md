@@ -111,7 +111,7 @@ The plugins register slash-commands as thin entry points to the operations above
 | Command | Operation | Routes to |
 |---------|-----------|-----------|
 | `/wiki` | — | Orientation dashboard: `wiki-doctor`, pulse, and the `wiki-plan` worklist |
-| `/ingest [source]` | Ingest | `wiki-ingest` skill; no argument ingests the next worklist item |
+| `/ingest [source \| all]` | Ingest | `wiki-ingest` skill; no argument ingests the next pending source (clustering the plan when several are pending), `all` drains the worklist in bounded batches |
 | `/query <question>` | Query | `wiki-query` skill, answering with citations |
 | `/lint [domain]` | Lint | `wiki-lint` skill plus `wiki-verify` |
 | `/save [title]` | Query | File the current durable answer into `comparisons/` |

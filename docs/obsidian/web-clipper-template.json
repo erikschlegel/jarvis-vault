@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "0.1.0",
+  "name": "jarvis-vault inbox",
+  "behavior": "create",
+  "path": "raw/inbox",
+  "noteNameFormat": "{{title|safe_name}}",
+  "noteContentFormat": "{{content}}",
+  "properties": [
+    {
+      "name": "source_type",
+      "value": "web",
+      "type": "text"
+    },
+    {
+      "name": "resource",
+      "value": "{{url}}",
+      "type": "text"
+    },
+    {
+      "name": "title",
+      "value": "{{title}}",
+      "type": "text"
+    },
+    {
+      "name": "imported_at",
+      "value": "{{date|date:\"YYYY-MM-DD\"}}",
+      "type": "date"
+    }
+  ],
+  "triggers": []
+}

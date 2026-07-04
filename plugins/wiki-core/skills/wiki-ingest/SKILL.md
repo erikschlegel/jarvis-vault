@@ -47,6 +47,16 @@ uv run wiki-plan --mark-ingested <source_id> [<source_id> ...]
 
 Ingest one source at a time by default; to clear a backlog of thin, related sources, use the bounded **Batch mode** below. Never batch silently.
 
+## Scope
+
+The `/ingest` command routes here by scope:
+
+- **Named source** (`/ingest <id>`) — ingest that one source solo.
+- **No argument** (`/ingest`) — read the worklist. If exactly one source is pending, ingest it. If several are pending, group them into batchable clusters (thin, related sources sharing entities/concepts) and present that plan before folding any in — do not silently drain the queue.
+- **All** (`/ingest all`) — drain the pending worklist through repeated **Batch mode** passes: one bounded cluster (~8 thin, related sources) at a time, each with its own go-ahead, index rebuild, and multi-id finalize. Heavy or contradiction-bearing sources still come out of the batch and ingest solo. `all` is "work the whole backlog in bounded batches," not a single monster call.
+
+Batching amortizes the fixed overhead of a pass — context reload, one index rebuild, one multi-id `--mark-ingested` finalize — across a cluster. It does **not** shortcut per-source summarization: every source still gets a real `sources/` page and real entity/concept updates.
+
 ## Write protocol
 
 Per the AGENTS.md Ingest operation, write in this order so cross-links resolve and the big picture stays current:

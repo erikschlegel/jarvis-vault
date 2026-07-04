@@ -1,6 +1,6 @@
 ---
-description: Fold a raw/ source into the wiki — the Ingest operation.
-argument-hint: "[source | all]"
+description: Fold a source into the wiki — the Ingest operation.
+argument-hint: "[source | path | url | text | all]"
 ---
 
 # Ingest a source
@@ -9,8 +9,12 @@ Run the **Ingest** operation per the wiki-ingest skill (`plugins/wiki-core/skill
 
 Source: $ARGUMENTS
 
-- If a source is named above, ingest that one.
-- If the argument is `all`, drain the pending worklist in bounded batches — cluster thin, related sources per the skill's **Batch mode** (get one go-ahead per cluster, ingest heavy or contradiction-bearing sources solo). Not a single monster call.
-- With no argument, compute the worklist with `uv run wiki-plan`. If exactly one source is pending, ingest it. If several are pending, group them into batchable clusters and present that plan before folding any in.
+The argument can take any of these shapes — the skill lands new content into `raw/inbox/` (via `wiki-add`) before ingesting, so you never have to add it by hand:
 
-The skill owns the write order, Batch mode, the `--mark-ingested` finalize step, and the `raw/` boundary.
+- **An existing source** — a `source_id`, or a file already under `raw/`. Ingest that one.
+- **A local file path or an `http(s)://` URL** — auto-landed with `uv run wiki-add <arg>`, then ingested.
+- **An attached file or a pasted/typed text block** (no path) — auto-landed with `uv run wiki-add --stdin`, then ingested.
+- **`all`** — drain the pending worklist in bounded batches — cluster thin, related sources per the skill's **Batch mode** (get one go-ahead per cluster, ingest heavy or contradiction-bearing sources solo). Not a single monster call.
+- **No argument** — compute the worklist with `uv run wiki-plan`. If exactly one source is pending, ingest it. If several are pending, group them into batchable clusters and present that plan before folding any in.
+
+The skill owns the classification, the write order, Batch mode, the `--mark-ingested` finalize step, and the `raw/` boundary.

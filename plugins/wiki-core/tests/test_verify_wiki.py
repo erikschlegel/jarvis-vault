@@ -247,3 +247,48 @@ def test_scalar_tags_fails(
     code, out = _run(monkeypatch, capsys, vault, manifest)
     assert code == 1
     assert "tags must be a list" in out
+
+
+def test_malformed_title_unescaped_quote_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    vault, manifest = _build_vault(tmp_path)
+    # The exact corruption that broke 27 source pages: an H1-derived title with
+    # unescaped interior quotes written into a double-quoted scalar.
+    page = SOURCE_PAGE.replace(
+        'title: "A source about agents"',
+        'title: "Boris: "not opening an IDE""',
+    )
+    (vault / "sources" / "source-111.md").write_text(page, encoding="utf-8")
+    code, out = _run(monkeypatch, capsys, vault, manifest)
+    assert code == 1
+    assert "frontmatter schema violations: 1" in out
+    assert "malformed quoted value for 'title'" in out
+
+
+def test_malformed_title_unterminated_quote_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    vault, manifest = _build_vault(tmp_path)
+    page = SOURCE_PAGE.replace(
+        'title: "A source about agents"',
+        'title: "unterminated',
+    )
+    (vault / "sources" / "source-111.md").write_text(page, encoding="utf-8")
+    code, out = _run(monkeypatch, capsys, vault, manifest)
+    assert code == 1
+    assert "malformed quoted value for 'title'" in out
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"),
+    [
+        ('"plain"', True),
+        ('"with \\"escaped\\" quotes"', True),
+        ('"Boris: "nested""', False),
+        ('"unterminated', False),
+        ('"trailing" junk', False),
+    ],
+)
+def test_double_quoted_is_valid(value: str, valid: bool) -> None:
+    assert verify_wiki._double_quoted_is_valid(value) is valid

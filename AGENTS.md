@@ -65,7 +65,7 @@ Producer extensions sit alongside the reserved keys (X source pages add `author`
 
 The user drops a source into `raw/` and asks you to process it.
 
-Sources reach `raw/` two ways. Connector plugins land their own content under a dedicated subtree (the X connector writes `raw/x/`); connector-less content — a local file or a web URL — comes in through the generic on-ramp `uv run wiki-add <path-or-url>`, which writes a `raw/inbox/` file with uniform `source_type`/`source_id` frontmatter. Either way, the engine dispatches per file to the matching [source adapter](#source-adapters), so the steps below are identical regardless of origin.
+Sources reach `raw/` two ways. Connector plugins land their own content under a dedicated subtree (the X connector writes `raw/x/`); connector-less content — a local file, a web URL, or a piped text block (a chat attachment or pasted note, via `uv run wiki-add --stdin`) — comes in through the generic on-ramp `uv run wiki-add` (`<path-or-url>`, or `--stdin`/`--text` for content with no readable path), which writes a `raw/inbox/` file with uniform `source_type`/`source_id` frontmatter. Either way, the engine dispatches per file to the matching [source adapter](#source-adapters), so the steps below are identical regardless of origin.
 
 1. Read the source and any `raw/assets/` it references.
 2. Discuss key takeaways with the user when useful — Karpathy prefers **one source at a time with the user involved**.
@@ -111,7 +111,7 @@ The plugins register slash-commands as thin entry points to the operations above
 | Command | Operation | Routes to |
 |---------|-----------|-----------|
 | `/wiki` | — | Orientation dashboard: `wiki-doctor`, pulse, and the `wiki-plan` worklist |
-| `/ingest [source \| all]` | Ingest | `wiki-ingest` skill; no argument ingests the next pending source (clustering the plan when several are pending), `all` drains the worklist in bounded batches |
+| `/ingest [source \| all]` | Ingest | `wiki-ingest` skill; accepts a `source_id`, a path/URL, or an attachment/pasted text block (auto-landed via `wiki-add`); no argument ingests the next pending source (clustering the plan when several are pending), `all` drains the worklist in bounded batches |
 | `/query <question>` | Query | `wiki-query` skill, answering with citations |
 | `/lint [domain]` | Lint | `wiki-lint` skill plus `wiki-verify` |
 | `/save [title]` | Query | File the current durable answer into `comparisons/` |
@@ -191,7 +191,7 @@ The wiki is markdown first; the engine is an accelerator, not a gate. Three tier
 
 The deterministic engine ships as two installable packages under `plugins/`, a uv workspace:
 
-- `plugins/wiki-core/` — the wiki engine (`wiki_core` package) and its skills. Console entry points: `wiki-plan` (ingest worklist + manifest), `wiki-add` (generic on-ramp landing a file or URL into `raw/inbox/`), `wiki-pages` (scaffold/index-add/log-append), `wiki-search` (build/search/duplicates), `wiki-verify` (lint), and `wiki-mcp` (the `jarvis-vault` MCP server).
+- `plugins/wiki-core/` — the wiki engine (`wiki_core` package) and its skills. Console entry points: `wiki-plan` (ingest worklist + manifest), `wiki-add` (generic on-ramp landing a file, URL, or piped text into `raw/inbox/`), `wiki-pages` (scaffold/index-add/log-append), `wiki-search` (build/search/duplicates), `wiki-verify` (lint), and `wiki-mcp` (the `jarvis-vault` MCP server).
 - `plugins/wiki-connector-x/` — the X (Twitter) connector (`wiki_connector_x` package, depends on `wiki-core`) and its skills. Entry points: `x-fetch`, `x-import`, `x-refresh-streams`, `x-transcribe`. It registers an `XAdapter` under the `wiki_core.source_adapters` entry-point group (see [Source adapters](#source-adapters)).
 
 Run any of them with `uv run <entry-point>` from the repo root. Each plugin directory **is** its Python package, so the scripts ship with the plugin for consumers.

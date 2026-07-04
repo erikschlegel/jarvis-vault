@@ -21,7 +21,7 @@ Slash-commands you invoke explicitly. They are thin wrappers that route to the m
 | Command | What it does |
 |---------|--------------|
 | `/wiki` | Orientation dashboard — health, recent context (pulse), and the pending ingest worklist |
-| `/ingest [source \| all]` | Run the Ingest operation; no argument ingests the next pending source, `all` drains the worklist in bounded batches |
+| `/ingest [source \| all]` | Run the Ingest operation; with no argument it ingests the next pending source, or clusters the queue into batchable groups and presents that plan when several are pending; `all` drains the worklist in bounded batches |
 | `/query <question>` | Run the Query operation and answer with citations |
 | `/lint [domain]` | Run the Lint operation — deterministic checks plus semantic review |
 | `/save [title]` | File the current answer or analysis into the vault as a durable page |

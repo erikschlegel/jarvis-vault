@@ -40,7 +40,7 @@ Capture is the front door: the lifecycle only works if getting a source in is ef
 
 ### Quickstart — 0 to 60
 
-You don't run the engine by hand. Get the files onto your machine once, then let Copilot drive the rest with two slash-commands — you never have to memorize a single `uv run` command.
+You don't run the engine by hand. Get the files onto your machine once, then let Copilot drive the rest — you never have to memorize a single `uv run` command.
 
 1. **Get the bits.** Clone and run the one-shot installer. It sets up the toolchain, seeds the vault, builds the index, and prints the one-time commands to install the skill plugins and register the MCP server:
 
@@ -50,12 +50,17 @@ You don't run the engine by hand. Get the files onto your machine once, then let
    bash bin/setup.sh
    ```
 
-   Then run the `copilot plugin install` command it prints — a one-time step so the skills and slash-commands appear in Copilot.
+   Then run the `copilot plugin` commands it prints — a one-time step (a marketplace add plus an install for each plugin) so the skills and slash-commands appear in Copilot.
 
-2. **Let Copilot finish it.** Open the wiki in your interaction surface (the GitHub Copilot desktop app, the Copilot CLI, or VS Code) and run:
+2. **Let Copilot finish it.** Open the wiki in your interaction surface and get to a working vault:
 
-   - **`/setup`** — seeds the vault, builds the search index, prints the `jarvis-vault` MCP server entry, and reports anything still missing (an unset `WIKI_VAULT`, an uninstalled plugin) with the exact fix, so Copilot can apply it with you. It assumes the toolchain from step 1 — it drives the engine, it does not install `uv` or dependencies.
-   - **`/wiki`** — your home base afterwards: it shows health, recent context, and the single next thing to do. Run it any time you are unsure what to do next.
+   - In the **Copilot CLI**, run the slash-commands directly.
+   - In the **desktop app** or **VS Code**, there are no slash-commands — just ask Copilot in plain language ("set up the wiki", "show me the wiki status") and the same skills run.
+
+   Two commands (or their plain-language equivalents) take you the rest of the way:
+
+   - **`/setup`** (or "set up the wiki") — seeds the vault, builds the search index, prints the `jarvis-vault` MCP server entry, and reports anything still missing (an unset `WIKI_VAULT`, an uninstalled plugin) with the exact fix, so Copilot can apply it with you. It assumes the toolchain from step 1 — it drives the engine, it does not install `uv` or dependencies.
+   - **`/wiki`** (or "show me the wiki status") — your home base afterwards: it shows health, recent context, and the single next thing to do. Reach for it any time you are unsure what to do next.
 
 That is 0 to 60. Everything below is detail for when you want to understand or customize what those two steps do — most users never need it.
 

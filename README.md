@@ -8,6 +8,26 @@ The LLM incrementally builds and maintains a persistent, interlinked wiki from i
 
 The wiki itself lives in an external Obsidian vault (resolved via `WIKI_VAULT`). This repo holds the agentic skills, the deterministic engine, and the templates that populate that vault consistently.
 
+## Why jarvis-vault
+
+The things worth remembering — articles, threads, docs, meeting notes, research — arrive faster than anyone can file them. Bookmarks pile up unread, notes rot in folders, and search hands back a list of links instead of an answer. jarvis-vault turns that incoming stream into a living, interlinked knowledge base that an agent keeps current for you, so months later you can ask a plain question and get a synthesized, cited answer.
+
+The project follows one data lifecycle in three phases:
+
+| Phase | What happens | Who drives it |
+|-------|--------------|---------------|
+| **Capture** | Save a source into `raw/` with minimal friction — clip a page in the browser, hand the agent a URL, or import your X likes. Sources are immutable inputs. | You |
+| **Ingest** | The agent folds each source into the wiki: a summary page, entity and concept pages, cross-links to what you already have, and explicit notes where sources disagree. | The agent |
+| **Retrieve** | Ask questions in plain language. The agent answers with citations back to wiki pages and files durable answers — comparisons, analyses — back into the vault. | You + the agent |
+
+Capture is the front door: the lifecycle only works if getting a source in is effortless, which is why the wiki supports [browser clipping](docs/obsidian/README.md), a one-line `wiki-add <url>`, and pasted-text drops alongside the connectors.
+
+### Who it is for
+
+- **Developers** drink from a firehose of engineering sources — papers, RFCs, changelogs, X threads, vendor docs. jarvis-vault becomes a second brain that cross-references them: capture a link as you read, let ingest connect it to related concepts, and later ask "what have I read about vector databases" to get a synthesized answer with sources instead of a bookmark graveyard.
+- **Business users** track competitors, market moves, customer reports, and meeting notes. Capture the reports and articles as they land; ingest builds an entity page per company or product that stays current and flags where two sources contradict; querying produces side-by-side comparisons you can file and revisit.
+- **Parents and households** — with a little technical comfort — collect recipes, school announcements, product research, pediatric advice, and trip plans. Clip them while browsing on any device that syncs the vault; the agent organizes and links them; months later ask "which car seat did that review recommend" and get the answer without re-reading everything.
+
 ## Three layers
 
 | Layer | Where |
@@ -104,10 +124,12 @@ See [AGENTS.md](AGENTS.md#commands) for the canonical command reference.
 
 ## Workflow
 
-1. Drop a source into `raw/` (Obsidian Web Clipper works well).
-2. Tell the agent to **ingest** it.
+The steps map onto the Capture → Ingest → Retrieve lifecycle above.
+
+1. **Capture** — drop a source into `raw/`: clip a page with the [Obsidian Web Clipper](docs/obsidian/README.md), run `uv run wiki-add <url>`, or import X likes and bookmarks.
+2. **Ingest** — tell the agent to ingest it (one source, or `/ingest all` to drain a backlog in bounded batches).
 3. Browse the vault in Obsidian — graph view, links, `index.md`.
-4. **Query** the wiki; file durable answers into the vault's `comparisons/`.
+4. **Retrieve** — query the wiki; file durable answers into the vault's `comparisons/`.
 5. Periodically ask the agent to **lint** the wiki.
 
 ## Skills

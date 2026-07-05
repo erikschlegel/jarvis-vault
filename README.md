@@ -54,7 +54,7 @@ You don't run the engine by hand. Get the files onto your machine once, then let
 
 2. **Let Copilot finish it.** Open the wiki in your interaction surface (the GitHub Copilot desktop app, the Copilot CLI, or VS Code) and run:
 
-   - **`/setup`** — seeds the vault, builds the search index, prints the `jarvis-vault` MCP server entry, and reports anything still missing (an unset `WIKI_VAULT`, an uninstalled plugin) with the exact fix, so Copilot can apply it with you.
+   - **`/setup`** — seeds the vault, builds the search index, prints the `jarvis-vault` MCP server entry, and reports anything still missing (an unset `WIKI_VAULT`, an uninstalled plugin) with the exact fix, so Copilot can apply it with you. It assumes the toolchain from step 1 — it drives the engine, it does not install `uv` or dependencies.
    - **`/wiki`** — your home base afterwards: it shows health, recent context, and the single next thing to do. Run it any time you are unsure what to do next.
 
 That is 0 to 60. Everything below is detail for when you want to understand or customize what those two steps do — most users never need it.

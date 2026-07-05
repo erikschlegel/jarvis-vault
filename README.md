@@ -38,6 +38,29 @@ Capture is the front door: the lifecycle only works if getting a source in is ef
 
 ## Setup
 
+### Quickstart — 0 to 60
+
+You don't run the engine by hand. Get the files onto your machine once, then let Copilot drive the rest with two slash-commands — you never have to memorize a single `uv run` command.
+
+1. **Get the bits.** Clone and run the one-shot installer. It sets up the toolchain, seeds the vault, builds the index, and prints the one-time commands to install the skill plugins and register the MCP server:
+
+   ```bash
+   git clone https://github.com/erikschlegel/jarvis-vault.git
+   cd jarvis-vault
+   bash bin/setup.sh
+   ```
+
+   Then run the `copilot plugin install` command it prints — a one-time step so the skills and slash-commands appear in Copilot.
+
+2. **Let Copilot finish it.** Open the wiki in your interaction surface (the GitHub Copilot desktop app, the Copilot CLI, or VS Code) and run:
+
+   - **`/setup`** — seeds the vault, builds the search index, prints the `jarvis-vault` MCP server entry, and reports anything still missing (an unset `WIKI_VAULT`, an uninstalled plugin) with the exact fix, so Copilot can apply it with you.
+   - **`/wiki`** — your home base afterwards: it shows health, recent context, and the single next thing to do. Run it any time you are unsure what to do next.
+
+That is 0 to 60. Everything below is detail for when you want to understand or customize what those two steps do — most users never need it.
+
+### Under the hood
+
 The deterministic engine is mandatory however you drive it: the skills and the MCP server resolve your vault from `WIKI_VAULT`. You need [uv](https://docs.astral.sh/uv/) (the Python toolchain), Python 3.12+ (uv can install it), and a folder to hold the wiki — ideally an [Obsidian](https://obsidian.md/) vault, though any directory works.
 
 | Requirement | Why |

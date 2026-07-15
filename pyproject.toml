@@ -22,10 +22,10 @@ wiki-connector-x = { workspace = true }
 [dependency-groups]
 dev = [
     "detect-secrets>=1.5.0",
-    "mypy>=2.1.0",
-    "pymarkdownlnt>=0.9.34",
+    "mypy>=2.3.0",
+    "pymarkdownlnt>=0.9.39",
     "pytest>=9.1.1",
-    "ruff>=0.15.20",
+    "ruff>=0.15.21",
 ]
 
 [tool.ruff]
